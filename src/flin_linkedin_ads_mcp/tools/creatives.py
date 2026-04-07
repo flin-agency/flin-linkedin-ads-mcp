@@ -186,7 +186,7 @@ def _inject_derived_image_url_in_collection(*, payload: dict[str, Any], client: 
     if not isinstance(elements, list):
         return payload
 
-    share_cache: dict[str, str | None] = {}
+    content_reference_cache: dict[str, str | None] = {}
     normalized_elements: list[Any] = []
     for item in elements:
         if not isinstance(item, Mapping):
@@ -197,7 +197,7 @@ def _inject_derived_image_url_in_collection(*, payload: dict[str, Any], client: 
         row["imageUrl"] = _resolve_image_url_for_creative(
             creative=row,
             client=client,
-            share_cache=share_cache,
+            content_reference_cache=content_reference_cache,
         )
         normalized_elements.append(row)
 
@@ -210,7 +210,7 @@ def _inject_derived_image_url_in_entity(*, payload: Mapping[str, Any], client: L
     row["imageUrl"] = _resolve_image_url_for_creative(
         creative=row,
         client=client,
-        share_cache={},
+        content_reference_cache={},
     )
     return row
 
@@ -219,34 +219,45 @@ def _resolve_image_url_for_creative(
     *,
     creative: Mapping[str, Any],
     client: LinkedInClient,
-    share_cache: dict[str, str | None],
+    content_reference_cache: dict[str, str | None],
 ) -> str | None:
     direct_url = _find_image_url(creative.get("content"))
     if direct_url:
         return direct_url
 
-    share_reference = _extract_share_reference(creative.get("content"))
-    if not share_reference:
+    content_reference = _extract_content_reference(creative.get("content"))
+    if not content_reference:
         return None
 
-    if share_reference in share_cache:
-        return share_cache[share_reference]
+    if content_reference in content_reference_cache:
+        return content_reference_cache[content_reference]
 
-    resolved_url = _resolve_image_url_from_share_reference(client=client, share_reference=share_reference)
-    share_cache[share_reference] = resolved_url
+    resolved_url = _resolve_image_url_from_content_reference(client=client, content_reference=content_reference)
+    content_reference_cache[content_reference] = resolved_url
     return resolved_url
 
 
-def _extract_share_reference(content: Any) -> str | None:
+def _extract_content_reference(content: Any) -> str | None:
     if not isinstance(content, Mapping):
         return None
     reference = content.get("reference")
     if not isinstance(reference, str):
         return None
     clean_reference = reference.strip()
-    if not clean_reference.startswith("urn:li:share:"):
+    if not clean_reference.startswith("urn:li:"):
         return None
     return clean_reference
+
+
+def _resolve_image_url_from_content_reference(*, client: LinkedInClient, content_reference: str) -> str | None:
+    if content_reference.startswith("urn:li:share:"):
+        return _resolve_image_url_from_share_reference(client=client, share_reference=content_reference)
+    if content_reference.startswith("urn:li:adDirectSponsoredContent:"):
+        return _resolve_image_url_from_ad_direct_sponsored_content_reference(
+            client=client,
+            sponsored_content_reference=content_reference,
+        )
+    return None
 
 
 def _resolve_image_url_from_share_reference(*, client: LinkedInClient, share_reference: str) -> str | None:
@@ -260,6 +271,20 @@ def _resolve_image_url_from_share_reference(*, client: LinkedInClient, share_ref
         if image_url:
             return image_url
     return None
+
+
+def _resolve_image_url_from_ad_direct_sponsored_content_reference(
+    *,
+    client: LinkedInClient,
+    sponsored_content_reference: str,
+) -> str | None:
+    sponsored_content_path = quote(sponsored_content_reference, safe="")
+    try:
+        payload = client.get_json(f"adDirectSponsoredContents/{sponsored_content_path}", params={})
+    except LinkedInAdsError:
+        return None
+
+    return _find_image_url(payload)
 
 
 def _find_image_url(value: Any) -> str | None:

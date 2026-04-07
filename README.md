@@ -137,6 +137,7 @@ Kompatibilität:
 Für Creative-Calls kann optional das Derived-Field `imageUrl` in `fields` angefordert werden.
 
 - `imageUrl` wird bevorzugt direkt aus dem Creative-`content` extrahiert.
+- Falls dort keine Bild-URL enthalten ist und eine `content.reference` auf `urn:li:adDirectSponsoredContent:*` zeigt, versucht der MCP zusätzlich eine Auflösung über `adDirectSponsoredContents/{urn}`.
 - Falls dort keine Bild-URL enthalten ist und eine Share-Referenz vorhanden ist, versucht der MCP zusätzlich eine Auflösung über die referenzierte Share/Post-Entity.
 - Wenn keine Bild-URL auflösbar ist, ist `imageUrl` `null`.
 

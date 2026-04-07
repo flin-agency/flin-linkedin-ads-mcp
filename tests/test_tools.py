@@ -666,6 +666,103 @@ def test_get_creative_resolves_image_url_from_share_reference(settings: LinkedIn
     assert any(path == "shares/urn%3Ali%3Ashare%3A123" for path, _ in client.calls)
 
 
+def test_get_creative_resolves_image_url_from_ad_direct_sponsored_content_reference(
+    settings: LinkedInAdsSettings,
+) -> None:
+    class DirectSponsoredContentClient(DummyClient):
+        def get_json(self, path: str, params: dict | None) -> dict:
+            self.calls.append((path, dict(params or {})))
+            if "/creatives/" in path:
+                return {
+                    "id": "urn:li:sponsoredCreative:935973186",
+                    "content": {"reference": "urn:li:adDirectSponsoredContent:123"},
+                }
+            if path == "adDirectSponsoredContents/urn%3Ali%3AadDirectSponsoredContent%3A123":
+                return {
+                    "content": {
+                        "contentEntities": [
+                            {
+                                "thumbnails": [
+                                    {"resolvedUrl": "https://media.licdn.com/dms/image/C4D12AQF/from-dsc.jpeg"}
+                                ]
+                            }
+                        ]
+                    }
+                }
+            return super().get_json(path, params)
+
+    client = DirectSponsoredContentClient(calls=[])
+
+    result = get_creative(
+        client=client,
+        settings=settings,
+        arguments={"ad_account_id": "508834004", "id": "935973186", "fields": ["id", "imageUrl"]},
+    )
+
+    assert result["ok"] is True
+    assert result["data"] == {
+        "id": "urn:li:sponsoredCreative:935973186",
+        "imageUrl": "https://media.licdn.com/dms/image/C4D12AQF/from-dsc.jpeg",
+    }
+    assert any(
+        path == "adDirectSponsoredContents/urn%3Ali%3AadDirectSponsoredContent%3A123" for path, _ in client.calls
+    )
+
+
+def test_list_creatives_resolves_image_url_from_ad_direct_sponsored_content_reference(
+    settings: LinkedInAdsSettings,
+) -> None:
+    class ListDirectSponsoredContentClient(DummyClient):
+        def get_json(self, path: str, params: dict | None) -> dict:
+            self.calls.append((path, dict(params or {})))
+            if path.startswith("adAccounts/508834004/creatives?"):
+                return {
+                    "elements": [
+                        {
+                            "id": "urn:li:sponsoredCreative:935973186",
+                            "content": {"reference": "urn:li:adDirectSponsoredContent:123"},
+                        },
+                        {
+                            "id": "urn:li:sponsoredCreative:935973187",
+                            "content": {"reference": "urn:li:adDirectSponsoredContent:123"},
+                        },
+                    ]
+                }
+            if path == "adDirectSponsoredContents/urn%3Ali%3AadDirectSponsoredContent%3A123":
+                return {"media": {"url": "https://media.licdn.com/dms/image/C4D12AQF/list-dsc.png"}}
+            return super().get_json(path, params)
+
+    client = ListDirectSponsoredContentClient(calls=[])
+
+    result = list_creatives(
+        client=client,
+        settings=settings,
+        arguments={"ad_account_id": "508834004", "fields": ["id", "imageUrl"]},
+    )
+
+    assert result["ok"] is True
+    assert result["data"] == [
+        {
+            "id": "urn:li:sponsoredCreative:935973186",
+            "imageUrl": "https://media.licdn.com/dms/image/C4D12AQF/list-dsc.png",
+        },
+        {
+            "id": "urn:li:sponsoredCreative:935973187",
+            "imageUrl": "https://media.licdn.com/dms/image/C4D12AQF/list-dsc.png",
+        },
+    ]
+    assert (
+        len(
+            [
+                path
+                for path, _ in client.calls
+                if path == "adDirectSponsoredContents/urn%3Ali%3AadDirectSponsoredContent%3A123"
+            ]
+        )
+        == 1
+    )
+
+
 def test_list_creatives_supports_optional_image_url_field(settings: LinkedInAdsSettings) -> None:
     class ListCreativeImageClient(DummyClient):
         def get_json(self, path: str, params: dict | None) -> dict:
