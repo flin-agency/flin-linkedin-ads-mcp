@@ -36,5 +36,9 @@ def test_ruff_uses_stable_explicit_rule_selection() -> None:
 
 def test_ci_installs_build_frontend_before_running_it() -> None:
     workflow = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    install_command = 'python -m pip install -e ".[dev]" build'
+    build_command = "run: python -m build"
 
-    assert 'python -m pip install -e ".[dev]" build' in workflow
+    assert install_command in workflow
+    assert build_command in workflow
+    assert workflow.index(install_command) < workflow.index(build_command)
