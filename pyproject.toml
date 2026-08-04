@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flin-linkedin-ads-mcp"
-version = "0.1.1"
+version = "0.1.2"
 description = "Strict read-only MCP server for LinkedIn Ads"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -15,7 +15,7 @@ authors = [
 keywords = ["mcp", "linkedin-ads", "linkedin-marketing", "model-context-protocol"]
 dependencies = [
   "httpx>=0.28.1",
-  "mcp>=1.0.0",
+  "mcp>=1.26,<2",
 ]
 
 [project.optional-dependencies]
