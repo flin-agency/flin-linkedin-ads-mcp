@@ -26,3 +26,9 @@ def test_metadata_test_dependencies_are_declared_directly() -> None:
     ]
 
     assert any(requirement.name == "packaging" for requirement in dev_requirements)
+
+
+def test_ruff_uses_stable_explicit_rule_selection() -> None:
+    pyproject = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text())
+
+    assert pyproject["tool"]["ruff"].get("lint", {}).get("select") == ["E4", "E7", "E9", "F"]

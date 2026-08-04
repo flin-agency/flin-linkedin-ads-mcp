@@ -101,3 +101,33 @@ Create annotated tag `v0.1.2` and push it to origin. The tag triggers `.github/w
 **Step 5: Monitor GitHub Actions**
 
 Wait for both CI and Release workflows and report their final conclusions and release URL.
+
+### Task 5: Recover from version-sensitive Ruff defaults if required
+
+**Files:**
+- Modify: `pyproject.toml`
+- Modify: `tests/test_package_metadata.py`
+
+**Step 1: Reproduce with the CI Ruff version**
+
+Run: `uvx ruff@0.16.1 check .`
+
+Expected before the fix: FAIL because Ruff 0.16.1 enables additional rules over pre-existing source.
+
+**Step 2: Add a failing lint-policy metadata test**
+
+Assert that `[tool.ruff.lint]` explicitly selects `E4`, `E7`, `E9`, and `F`.
+
+**Step 3: Make the lint policy explicit**
+
+Add the explicit rule selection and bump the unpublished recovery release to 0.1.3.
+
+**Step 4: Verify with both local and CI Ruff versions**
+
+Run the metadata test, `ruff check .`, and `uvx ruff@0.16.1 check .`.
+
+Expected: all commands pass with the same rule policy.
+
+**Step 5: Publish recovery release**
+
+Push `main`, create tag `v0.1.3`, and monitor CI and Release through PyPI publication and GitHub Release creation.

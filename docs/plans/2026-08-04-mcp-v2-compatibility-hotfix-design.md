@@ -27,4 +27,8 @@ No server behavior or LinkedIn API behavior changes. A future MCP SDK v2 migrati
 - Run all unit tests, Ruff, and mypy.
 - Build wheel and source distribution from a clean tracked-file snapshot and inspect the wheel metadata.
 - Install the wheel in a fresh environment and complete an MCP initialize/tools-list handshake.
-- Push commit and release tag `v0.1.2`, then monitor the CI and release workflows.
+- Push commit and release tag `v0.1.2`, then monitor the CI and release workflows. If a release gate fails before publication, fix the gate and use the next patch version rather than rewriting the failed tag.
+
+## Release Recovery
+
+The `v0.1.2` workflows exposed a Ruff version-skew failure before any package was published: local Ruff 0.15.7 passed, while CI resolved Ruff 0.16.1 and applied expanded defaults to pre-existing code. Preserve the project's intended lint gate explicitly with `select = ["E4", "E7", "E9", "F"]`, protect it with a metadata test, and publish the recovered package as 0.1.3.
