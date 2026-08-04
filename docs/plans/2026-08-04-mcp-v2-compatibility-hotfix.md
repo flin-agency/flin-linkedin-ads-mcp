@@ -14,10 +14,13 @@
 
 **Files:**
 - Create: `tests/test_package_metadata.py`
+- Modify: `pyproject.toml` dev dependencies
 
 **Step 1: Write the failing test**
 
 Parse `pyproject.toml`, locate the MCP requirement with `packaging.requirements.Requirement`, and assert that version 1.26.0 is included while version 2.0.0 is excluded.
+
+Declare `packaging` directly in the `dev` extra because the regression test imports it.
 
 **Step 2: Run the targeted test and verify RED**
 
@@ -35,11 +38,11 @@ Expected: FAIL because the current `mcp>=1.0.0` requirement accepts 2.0.0.
 
 Change the runtime requirement to `mcp>=1.26,<2` and bump the project version from 0.1.1 to 0.1.2.
 
-**Step 2: Refresh the lockfile**
+**Step 2: Check dependency resolution locally**
 
 Run: `uv lock`
 
-Expected: the root package metadata reflects version 0.1.2 and the upper bound, with MCP remaining on a compatible v1 release.
+Expected: the generated local lock reflects version 0.1.2 and the upper bound, with MCP remaining on a compatible v1 release. `uv.lock` is ignored by repository policy and must not be staged.
 
 **Step 3: Run the targeted test and verify GREEN**
 
@@ -60,7 +63,7 @@ Expected: all commands exit successfully.
 
 **Step 2: Build the distributions**
 
-Run: `uv build`
+Run: `uv build` from a clean tracked-file snapshot.
 
 Expected: wheel and source distribution for 0.1.2 are created.
 
@@ -77,7 +80,7 @@ Expected: the process stays up through initialization and returns the registered
 ### Task 4: Publish the patch release
 
 **Files:**
-- Stage only the metadata, test, lockfile, and plan documents from this hotfix.
+- Stage only the metadata, test, and plan documents from this hotfix. Do not stage the ignored local lockfile.
 
 **Step 1: Review the final diff and secret scan**
 

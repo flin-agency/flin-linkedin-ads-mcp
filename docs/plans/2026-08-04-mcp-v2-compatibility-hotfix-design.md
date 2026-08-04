@@ -16,7 +16,7 @@ The package declares `mcp>=1.0.0`, so a fresh `uvx` installation now selects MCP
 
 ## Approved Design
 
-Use approach 1. Change the runtime dependency to `mcp>=1.26,<2`, keeping the oldest version aligned with the repository's tested lockfile. Add a packaging regression test that proves MCP 1.26 is accepted and MCP 2.0 is rejected. Bump the package patch version to 0.1.2 and refresh `uv.lock`.
+Use approach 1. Change the runtime dependency to `mcp>=1.26,<2`, keeping the oldest version aligned with the repository's previously tested dependency set. Add a packaging regression test that proves MCP 1.26 is accepted and MCP 2.0 is rejected. Bump the package patch version to 0.1.2. The repository intentionally ignores `uv.lock`, so use `uv lock` only as a local resolver check and do not publish the generated lockfile.
 
 No server behavior or LinkedIn API behavior changes. A future MCP SDK v2 migration should be handled separately with dedicated integration coverage.
 
@@ -25,6 +25,6 @@ No server behavior or LinkedIn API behavior changes. A future MCP SDK v2 migrati
 - Observe the new dependency-bound test fail against the current metadata.
 - Apply the metadata change and observe the targeted test pass.
 - Run all unit tests, Ruff, and mypy.
-- Build wheel and source distribution and inspect the wheel metadata.
+- Build wheel and source distribution from a clean tracked-file snapshot and inspect the wheel metadata.
 - Install the wheel in a fresh environment and complete an MCP initialize/tools-list handshake.
 - Push commit and release tag `v0.1.2`, then monitor the CI and release workflows.
