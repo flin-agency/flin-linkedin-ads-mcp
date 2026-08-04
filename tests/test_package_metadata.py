@@ -32,3 +32,9 @@ def test_ruff_uses_stable_explicit_rule_selection() -> None:
     pyproject = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text())
 
     assert pyproject["tool"]["ruff"].get("lint", {}).get("select") == ["E4", "E7", "E9", "F"]
+
+
+def test_ci_installs_build_frontend_before_running_it() -> None:
+    workflow = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text()
+
+    assert 'python -m pip install -e ".[dev]" build' in workflow

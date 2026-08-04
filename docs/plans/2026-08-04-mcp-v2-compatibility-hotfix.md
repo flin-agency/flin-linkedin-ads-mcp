@@ -131,3 +131,27 @@ Expected: all commands pass with the same rule policy.
 **Step 5: Publish recovery release**
 
 Push `main`, create tag `v0.1.3`, and monitor CI and Release through PyPI publication and GitHub Release creation.
+
+### Task 6: Repair the standalone CI build step
+
+**Files:**
+- Modify: `.github/workflows/ci.yml`
+- Modify: `tests/test_package_metadata.py`
+
+**Step 1: Reproduce in an isolated dev environment**
+
+Run: `uv run --isolated --extra dev python -m build`.
+
+Expected before the fix: FAIL with `No module named build`.
+
+**Step 2: Add a failing workflow contract test**
+
+Assert that CI installs the `build` frontend before invoking `python -m build`.
+
+**Step 3: Install the missing CI-only frontend**
+
+Add `build` to the CI pip install command without changing published package dependencies.
+
+**Step 4: Verify and push**
+
+Run the full local quality gates, push `main`, and monitor the new main CI run to completion. No new release tag is required because the 0.1.3 Release workflow already succeeded.
