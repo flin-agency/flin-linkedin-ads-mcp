@@ -6,7 +6,7 @@ Restore `uvx flin-linkedin-ads-mcp` startup after MCP SDK 2.0 became the default
 
 ## Root Cause
 
-The package declares `mcp>=1.0.0`, so a fresh `uvx` installation now selects MCP SDK 2.0.0. The server uses the MCP SDK v1 low-level decorators `Server.list_tools()` and `Server.call_tool()`, which were removed in v2. The repository lockfile still resolves MCP 1.26.0, so local tests did not exercise the incompatible dependency resolution.
+The package declares `mcp>=1.0.0`, so a fresh `uvx` installation now selects MCP SDK 2.0.0. The server uses the MCP SDK v1 low-level decorators `Server.list_tools()` and `Server.call_tool()`, which were removed in v2. A developer's ignored local lockfile still resolved MCP 1.26.0, so local tests did not exercise the incompatible dependency resolution.
 
 ## Approaches Considered
 
