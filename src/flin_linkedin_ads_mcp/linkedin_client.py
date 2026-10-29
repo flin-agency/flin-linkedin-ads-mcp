@@ -7,6 +7,7 @@ from urllib.parse import parse_qsl, urlsplit
 
 import httpx
 
+from .auth import LinkedInAuth
 from .errors import (
     LinkedInAPIError,
     LinkedInAdsError,
@@ -33,7 +34,9 @@ class LinkedInClient:
         timeout_seconds: float,
         max_retries: int,
         client: httpx.Client | None = None,
+        auth: LinkedInAuth | None = None,
     ) -> None:
+        self.auth = auth
         self.access_token = access_token
         self.api_version = api_version
         self.restli_protocol_version = restli_protocol_version
@@ -50,6 +53,8 @@ class LinkedInClient:
         self.close()
 
     def close(self) -> None:
+        if self.auth is not None:
+            self.auth.close()
         if self._owns_client:
             self._client.close()
 
@@ -69,7 +74,7 @@ class LinkedInClient:
         url = self._build_url(path)
         request_params = dict(params) if params else None
         request_headers = {
-            "Authorization": f"Bearer {self.access_token}",
+            "Authorization": f"Bearer {self.auth.get_access_token() if self.auth else self.access_token}",
             "Linkedin-Version": self.api_version,
             "X-Restli-Protocol-Version": self.restli_protocol_version,
         }
@@ -78,6 +83,7 @@ class LinkedInClient:
             request_headers["X-RestLi-Method"] = restli_method_override
 
         attempts = 0
+        refreshed = False
         while True:
             response = self._client.request(
                 method,
@@ -93,6 +99,14 @@ class LinkedInClient:
                 return _RequestResult(payload=payload if isinstance(payload, dict) else {}, request_id=request_id)
 
             error = self._error_from_response(response, request_id=request_id)
+            if response.status_code == 401 and self.auth is not None:
+                self.auth.mark_rejected()
+                if not refreshed:
+                    request_headers["Authorization"] = (
+                        f"Bearer {self.auth.get_access_token(force_refresh=True)}"
+                    )
+                    refreshed = True
+                    continue
             if self._should_retry(response.status_code) and attempts < self.max_retries:
                 time.sleep(self._backoff_seconds(attempts))
                 attempts += 1
@@ -134,8 +148,9 @@ class LinkedInClient:
         }
 
         if response.status_code == 401:
+            details["next_tool"] = "linkedin_login"
             return LinkedInAuthError(
-                message,
+                message + " Use linkedin_login to reconnect.",
                 status_code=response.status_code,
                 request_id=request_id,
                 details=details,

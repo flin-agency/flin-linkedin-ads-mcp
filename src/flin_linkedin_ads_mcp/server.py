@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from .config import LinkedInAdsSettings, load_config
+from .auth import LinkedInAuth
 from .dispatcher import dispatch_tool
 from .errors import AccountSelectionRequired, LinkedInAdsError
 from .response import error_response, selection_required_response
@@ -48,7 +49,17 @@ def create_server(settings: LinkedInAdsSettings | None = None, client: Any | Non
     async def call_tool(name: str, arguments: dict[str, Any]) -> list[Any]:
         request_id = getattr(runtime_client, "last_request_id", None)
         try:
-            result = dispatch_tool(name, arguments or {}, settings=resolved_settings, client=runtime_client)
+            if name in {"linkedin_login", "linkedin_login_status"}:
+                if arguments:
+                    raise ValueError(f"{name} does not accept arguments")
+                auth = runtime_client.auth
+                result = {"ok": True, "data": (
+                    auth.login() if name == "linkedin_login" else auth.status()
+                )}
+            else:
+                result = dispatch_tool(
+                    name, arguments or {}, settings=resolved_settings, client=runtime_client
+                )
         except AccountSelectionRequired as exc:
             result = selection_required_response(
                 question=str(exc),
@@ -116,4 +127,5 @@ def _client(settings: LinkedInAdsSettings):
         restli_protocol_version=settings.restli_protocol_version,
         timeout_seconds=settings.timeout_seconds,
         max_retries=settings.max_retries,
+        auth=LinkedInAuth(settings),
     )

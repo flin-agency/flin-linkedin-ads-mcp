@@ -25,6 +25,24 @@ class ToolSpec:
 def tool_specs() -> list[ToolSpec]:
     return [
         ToolSpec(
+            name="linkedin_login",
+            description=(
+                "Connect or reconnect LinkedIn Ads, including after EXPIRED_ACCESS_TOKEN/401. "
+                "Returns a login URL to open in a browser on the MCP server's computer. "
+                "Saves credentials locally after consent. Requires configured LinkedIn app "
+                "client ID and secret. Never ask for tokens, passwords or secrets in chat."
+            ),
+            input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+        ),
+        ToolSpec(
+            name="linkedin_login_status",
+            description=(
+                "Check local LinkedIn login progress and token expiry without exposing credentials. "
+                "After login, use list_ad_accounts to verify API access."
+            ),
+            input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+        ),
+        ToolSpec(
             name="list_ad_accounts",
             description="List LinkedIn ad accounts accessible by the token",
             input_schema=_list_schema(),

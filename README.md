@@ -13,14 +13,16 @@ Er ist dafür gebaut, direkt in Claude über MCP eingebunden und getestet zu wer
 - Share-Content lesen (`get_share_content`, best effort für Bild-URLs)
 - Insights/Analytics lesen
 - Company Intelligence lesen (`/accountIntelligence`, private API Access nötig)
-- Keine Schreiboperationen in `v0.1.x`
+- Direkter LinkedIn-Login und Reconnect über `linkedin_login`
+- Automatische Token-Erneuerung, falls LinkedIn einen Refresh-Token ausstellt
+- Keine Schreiboperationen an Werbekonten oder Kampagnen in `v0.1.x`
 
 ## Scope `v0.1.x` (strict read-only)
 
 - Kein Create/Update/Delete
 - Kein Pause/Resume
 - Kein generischer Proxy-Endpunkt
-- Kein eingebauter OAuth-Refresh-Flow im MCP selbst
+- Authentifizierungs-Tools speichern ausschliesslich lokale Zugangsdaten; Ads-Daten bleiben read-only
 
 ## Direkt in Claude testen
 
@@ -44,7 +46,9 @@ In Claude:
         "flin-linkedin-ads-mcp"
       ],
       "env": {
-        "LINKEDIN_ACCESS_TOKEN": "AQX...",
+        "LINKEDIN_CLIENT_ID": "DEINE_APP_CLIENT_ID",
+        "LINKEDIN_CLIENT_SECRET": "DEIN_APP_CLIENT_SECRET",
+        "LINKEDIN_REDIRECT_URI": "http://localhost:9876/callback",
         "LINKEDIN_API_VERSION": "202603",
         "LINKEDIN_RESTLI_PROTOCOL_VERSION": "2.0.0"
       }
@@ -53,7 +57,14 @@ In Claude:
 }
 ```
 
-Danach Claude neu starten.
+In der LinkedIn Developer App unter **Auth** zuerst exakt `http://localhost:9876/callback`
+als Redirect URL eintragen. Danach Claude neu starten und `linkedin_login` aufrufen.
+Den zurückgegebenen Link auf demselben Computer im Browser öffnen und bei LinkedIn anmelden.
+Anschliessend `linkedin_login_status` und `list_ad_accounts` aufrufen.
+Die App braucht die Berechtigungen `r_ads` und `r_ads_reporting`.
+
+Ein bereits vorhandener `LINKEDIN_ACCESS_TOKEN` funktioniert weiterhin. Nach einem Login
+hat der gespeicherte OAuth-Token Vorrang vor einem alten Token aus der Konfiguration.
 
 ### Variante B: Via `uvx` (wenn Paket publiziert ist)
 
@@ -64,7 +75,9 @@ Danach Claude neu starten.
       "command": "uvx",
       "args": ["--refresh", "flin-linkedin-ads-mcp"],
       "env": {
-        "LINKEDIN_ACCESS_TOKEN": "AQX...",
+        "LINKEDIN_CLIENT_ID": "DEINE_APP_CLIENT_ID",
+        "LINKEDIN_CLIENT_SECRET": "DEIN_APP_CLIENT_SECRET",
+        "LINKEDIN_REDIRECT_URI": "http://localhost:9876/callback",
         "LINKEDIN_API_VERSION": "202603",
         "LINKEDIN_RESTLI_PROTOCOL_VERSION": "2.0.0"
       }
@@ -77,9 +90,11 @@ Danach Claude neu starten.
 
 Nach dem Restart in Claude diese Calls testen:
 
-1. `list_ad_accounts`
-2. `list_campaigns`
-3. `get_insights` mit `pivot=campaign`
+1. `linkedin_login` und den zurückgegebenen Link öffnen
+2. `linkedin_login_status` (nach erfolgreichem Login: `token_available`)
+3. `list_ad_accounts`
+4. `list_campaigns`
+5. `get_insights` mit `pivot=campaign`
 
 Wenn `list_campaigns` eine Auswahl zurückgibt, den Call mit einem vorgeschlagenen `ad_account_id` wiederholen.
 
@@ -233,113 +248,76 @@ curl -i 'https://api.linkedin.com/rest/adAccounts?q=search&pageSize=1' \
   -H 'X-Restli-Protocol-Version: 2.0.0'
 ```
 
-## LinkedIn Access Token generieren (Schritt für Schritt)
+## Direkt anmelden und neu verbinden
 
-Voraussetzung:
-- LinkedIn Developer App vorhanden
-- Marketing API Zugriff für die App freigeschaltet
-- Scope `r_ads` für Entities (Accounts/Campaigns/Creatives)
-- Scope `r_ads_reporting` für `get_insights`
-- Die Ad Accounts sind in der Developer App unter `Products -> View Ad Accounts` gemappt
-- Der authentifizierte User hat eine Ad-Account-Rolle (mind. `VIEWER`)
+Die Anmeldung ist für einen **lokalen stdio-MCP-Server mit einem Benutzer** vorgesehen.
+Browser und Server müssen auf demselben Computer laufen. Dies ist keine OAuth-Anmeldung
+für einen gemeinsam genutzten Remote-/HTTP-Connector.
 
-### 1) App in LinkedIn Developer Portal vorbereiten
+Einmalige Einrichtung:
 
-- In der App unter `Auth`:
-  - `Client ID` und `Client Secret` notieren
-  - Redirect URL hinzufügen, z. B. `http://localhost:9876/callback`
-- In der App sicherstellen, dass die Marketing/Ads Berechtigungen aktiviert sind (`r_ads` + `r_ads_reporting`)
+1. In der LinkedIn Developer App den Marketing-/Advertising-Zugang mit `r_ads` und
+   `r_ads_reporting` freischalten. Der anmeldende Benutzer braucht Zugriff auf das Werbekonto.
+2. Unter **Auth** die Redirect URL `http://localhost:9876/callback` registrieren.
+3. `LINKEDIN_CLIENT_ID` und `LINKEDIN_CLIENT_SECRET` in der MCP-Konfiguration hinterlegen
+   (siehe Beispiel oben). Secrets gehören nicht in den Chat.
+4. MCP-Client einmal neu starten, damit er die neue Konfiguration und Tools lädt.
 
-### 2) Authorization Code holen
+Danach reicht im Chat die Bitte **„LinkedIn Ads neu verbinden“**:
 
-Im Browser öffnen (Werte ersetzen, `redirect_uri` URL-encoden).
+- `linkedin_login` liefert `authorization_url`. Den Link im lokalen Browser öffnen.
+- Der Server nimmt die Rückleitung automatisch entgegen und speichert den Token.
+- `linkedin_login_status` zeigt den lokalen Status; `token_available` bestätigt noch
+  keine Kontoberechtigungen. Mit `list_ad_accounts` den echten API-Zugriff prüfen.
+- Anschliessend den ursprünglichen Call wiederholen, zum Beispiel
+  `get_ad_account` mit `{"id":"509614236"}`. Kein weiterer Neustart und kein Token-Kopieren nötig.
 
-Für diesen MCP müssen im Scope mindestens enthalten sein:
+Login-Links gelten zehn Minuten. Ein erneuter Aufruf während eines offenen Logins
+liefert denselben Link. Abbruch, Ablauf oder ein Fehler lässt sich über den Status abfragen;
+anschliessend kann ein neuer Login gestartet werden. Bei einem belegten Callback-Port
+entweder den anderen Server schliessen oder `LINKEDIN_REDIRECT_URI` auf einen freien Port
+ändern und dieselbe URL in der LinkedIn App registrieren.
 
-- `r_ads` (Accounts/Campaigns/Creatives)
-- `r_ads_reporting` (`get_insights`)
+### Token-Speicherung und Erneuerung
 
-Optional (nur wenn deine App dafür freigeschaltet ist):
+Standard: `~/.config/flin-linkedin-ads-mcp/tokens.json` (über `LINKEDIN_TOKEN_FILE` änderbar).
+Die Datei enthält sensible Zugangsdaten, wird atomar mit Dateirechten `0600` geschrieben
+und sollte ausserhalb des Repositories bleiben. Sie ist keine verschlüsselte Schlüsselablage.
+Für getrennte Benutzer/Verbindungen jeweils eine eigene Datei und einen eigenen Callback-Port
+verwenden. Ein gespeicherter Token wird nur für die zugehörige Client ID geladen.
 
-- `offline_access` (für Refresh-Token-Flow)
+Ein gespeicherter Login hat Vorrang vor `LINKEDIN_ACCESS_TOKEN`. Die Tokens werden beim
+Serverstart geladen und nach erfolgreichem Login sofort im laufenden Server verwendet.
+Token, Client Secret und Authorization Code erscheinen nicht in den Auth-Tool-Antworten
+oder Callback-Logs. `linkedin_login_status` gibt nur Status und Ablaufzeitpunkte zurück.
 
-Empfohlene URL für den MCP (ohne Refresh-Token):
+Falls LinkedIn einen Refresh-Token ausstellt, erneuert der Server den Access-Token kurz
+vor Ablauf bei der nächsten API-Abfrage sowie einmal nach einer 401-Antwort.
+Abgelaufene/widerrufene Refresh-Tokens führen zurück zu `linkedin_login`.
+Programmatic Refresh hängt von der Freischaltung der LinkedIn App ab;
+`offline_access` wird nicht angefordert. Siehe
+[LinkedIn Programmatic Refresh Tokens](https://learn.microsoft.com/en-us/linkedin/shared/authentication/programmatic-refresh-tokens).
 
-```text
-https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=DEIN_CLIENT_ID&redirect_uri=http%3A%2F%2Flocalhost%3A9876%2Fcallback&scope=r_ads%20r_ads_reporting&state=dein_csrf_state
-```
+### 401/403 diagnostizieren
 
-Variante mit optionalem `offline_access`:
-
-```text
-https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=DEIN_CLIENT_ID&redirect_uri=http%3A%2F%2Flocalhost%3A9876%2Fcallback&scope=r_ads%20r_ads_reporting%20offline_access&state=dein_csrf_state
-```
-
-Nach Login/Consent leitet LinkedIn auf deine Redirect-URL zurück:
-
-```text
-http://localhost:9876/callback?code=AUTH_CODE&state=dein_csrf_state
-```
-
-Den `code` aus der URL kopieren.
-
-### 3) Authorization Code gegen Access Token tauschen
-
-```bash
-curl -X POST 'https://www.linkedin.com/oauth/v2/accessToken' \
-  -H 'Content-Type: application/x-www-form-urlencoded' \
-  --data-urlencode 'grant_type=authorization_code' \
-  --data-urlencode 'code=AUTH_CODE' \
-  --data-urlencode 'redirect_uri=http://localhost:9876/callback' \
-  --data-urlencode 'client_id=DEIN_CLIENT_ID' \
-  --data-urlencode 'client_secret=DEIN_CLIENT_SECRET'
-```
-
-Beispiel-Response:
-
-```json
-{
-  "access_token": "AQX...",
-  "expires_in": 5183999
-}
-```
-
-`access_token` als `LINKEDIN_ACCESS_TOKEN` in die Claude MCP Config übernehmen.
-
-Wichtig: Bei diesem MCP erfolgt Authentifizierung über `env` in der MCP Config.
-Es gibt hier keinen eingebauten OAuth-Refresh-Flow im Server selbst.
-Wenn der Token abläuft, musst du einen neuen Token erzeugen und in der Config ersetzen.
-
-### 4) Ablauf / Erneuerung
-
-- Access Tokens laufen typischerweise nach ca. 60 Tagen ab.
-- Dann OAuth-Flow erneut durchführen.
-- Falls deine App für programmatic refresh tokens freigeschaltet ist, kannst du stattdessen per Refresh Token erneuern.
-
-### 5) 401/403 schnell diagnostizieren
-
-Token gegen Ads-Account-Endpunkt testen:
-
-```bash
-curl -i 'https://api.linkedin.com/rest/adAccounts?q=search&pageSize=1' \
-  -H 'Authorization: Bearer DEIN_ACCESS_TOKEN' \
-  -H 'Linkedin-Version: 202603' \
-  -H 'X-Restli-Protocol-Version: 2.0.0'
-```
-
-Interpretation:
-
-- `401 Unauthorized`: Token abgelaufen, widerrufen oder falscher Scope-Set wurde neu konsentiert
-- `403 Forbidden`: Token ist gültig, aber Scope/Rolle/App-Mapping fehlt
-- `200 OK`: Auth grundsätzlich korrekt
+- `401` / `EXPIRED_ACCESS_TOKEN`: `linkedin_login` aufrufen und den Link öffnen.
+- Login meldet fehlende Konfiguration: Client ID und Client Secret einmalig hinterlegen.
+- `403`: App-Berechtigungen und Rolle des angemeldeten Benutzers im Werbekonto prüfen.
+- Der Server kann auch ohne Token starten, damit die Login-/Status-Tools verfügbar sind.
 
 ## Environment Variablen
 
-Pflicht:
+Für direkten Login:
 
-- `LINKEDIN_ACCESS_TOKEN`
+- `LINKEDIN_CLIENT_ID` und `LINKEDIN_CLIENT_SECRET` (immer zusammen setzen)
+- `LINKEDIN_REDIRECT_URI` (Default: `http://localhost:9876/callback`; HTTP, `localhost` oder
+  `127.0.0.1`, expliziter Port und Pfad; muss exakt in der App registriert sein)
+- `LINKEDIN_TOKEN_FILE` (Default: `~/.config/flin-linkedin-ads-mcp/tokens.json`)
 
-Optional:
+Alternativ bleibt `LINKEDIN_ACCESS_TOKEN` als fest hinterlegter Token unterstützt.
+Ohne OAuth-App-Konfiguration kann dieser Token nicht automatisch erneuert werden.
+
+Weitere Optionen:
 
 - `LINKEDIN_API_VERSION` (Default: `202603`)
 - `LINKEDIN_RESTLI_PROTOCOL_VERSION` (Default: `2.0.0`)
@@ -360,7 +338,7 @@ mypy src
 
 - Niemals `LINKEDIN_ACCESS_TOKEN` oder OAuth Secrets ins Repo committen
 - `.env` ist bereits in `.gitignore`
-- Token nur über MCP `env` in Claude oder über lokale Shell-Umgebung setzen
+- App-Zugangsdaten nur über MCP `env` oder lokale Shell-Umgebung setzen; OAuth-Tokens werden lokal gespeichert
 - Vor jedem Push prüfen:
 
 ```bash

@@ -5,11 +5,26 @@ import pytest
 from flin_linkedin_ads_mcp.config import load_config
 
 
-def test_load_config_requires_access_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("LINKEDIN_ACCESS_TOKEN", raising=False)
+def test_load_config_allows_starting_before_login() -> None:
+    assert load_config({}).access_token == ""
 
-    with pytest.raises(ValueError, match="LINKEDIN_ACCESS_TOKEN is required"):
-        load_config()
+
+def test_load_config_accepts_oauth_without_static_token() -> None:
+    settings = load_config({"LINKEDIN_CLIENT_ID": "app", "LINKEDIN_CLIENT_SECRET": "secret"})
+    assert settings.client_id == "app"
+    assert "secret" not in repr(settings)
+
+
+@pytest.mark.parametrize("env", [
+    {"LINKEDIN_CLIENT_ID": "app"}, {"LINKEDIN_CLIENT_SECRET": "secret"},
+    {"LINKEDIN_REDIRECT_URI": "http://example.com:9876/callback"},
+    {"LINKEDIN_REDIRECT_URI": "http://localhost/callback"},
+    {"LINKEDIN_REDIRECT_URI": "http://localhost:9876/callback?extra=yes"},
+    {"LINKEDIN_REDIRECT_URI": "http://user@localhost:9876/callback"},
+])
+def test_load_config_rejects_invalid_oauth_configuration(env) -> None:
+    with pytest.raises(ValueError):
+        load_config(env)
 
 
 def test_load_config_uses_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
