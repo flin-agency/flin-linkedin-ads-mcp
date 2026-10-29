@@ -8,6 +8,7 @@ from urllib.parse import parse_qsl, urlsplit
 import httpx
 
 from .auth import LinkedInAuth
+from .config import DEFAULT_API_VERSION
 from .errors import (
     LinkedInAPIError,
     LinkedInAdsError,
@@ -146,6 +147,18 @@ class LinkedInClient:
             "status_code": response.status_code,
             "error": payload,
         }
+
+        if response.status_code == 426:
+            details.update(
+                requested_api_version=self.api_version,
+                suggested_api_version=DEFAULT_API_VERSION,
+            )
+            return LinkedInValidationError(
+                f"LinkedIn no longer serves this endpoint with API version {self.api_version}. "
+                f"Set LINKEDIN_API_VERSION={DEFAULT_API_VERSION} and restart the MCP server. "
+                "Retired endpoints must also be migrated to their replacement API.",
+                status_code=response.status_code, request_id=request_id, details=details,
+            )
 
         if response.status_code == 401:
             details["next_tool"] = "linkedin_login"

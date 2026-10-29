@@ -2,6 +2,8 @@ from __future__ import annotations
 
 
 READ_ONLY_TOOL_NAMES = {
+    "search_ad_library",
+    "search_brand_partnerships",
     "list_ad_accounts",
     "get_ad_account",
     "list_campaign_groups",

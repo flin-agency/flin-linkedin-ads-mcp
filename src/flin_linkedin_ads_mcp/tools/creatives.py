@@ -19,6 +19,7 @@ from .common import (
     to_campaign_urn,
     to_restli_list,
 )
+from .share_content import _fetch_share_payload, _extract_image_urls, _resolve_image_urns
 
 DEFAULT_CREATIVE_FIELDS = ["id", "name", "intendedStatus", "campaign", "account", "isServing"]
 ALLOWED_CREATIVE_FIELDS = {
@@ -37,6 +38,7 @@ ALLOWED_CREATIVE_FIELDS = {
     "lastModifiedAt",
     "lastModifiedBy",
     "leadgenCallToAction",
+    "metadata",
 }
 DERIVED_CREATIVE_FIELDS: dict[str, tuple[str, ...]] = {
     "imageUrl": ("content",),
@@ -56,6 +58,7 @@ def list_creatives(
         default_fields=DEFAULT_CREATIVE_FIELDS,
         allowed_fields=ALLOWED_CREATIVE_FIELDS,
     )
+    _validate_metadata_version(fields_csv, settings.api_version)
 
     creative_ids = arguments.get("creative_ids")
     if creative_ids is not None and not isinstance(creative_ids, list):
@@ -87,8 +90,11 @@ def list_creatives(
         f"adAccounts/{account_id}/creatives?{_raw_query(params)}",
         params={},
     )
-    if "imageUrl" in derived_fields:
-        payload = _inject_derived_image_url_in_collection(payload=payload, client=client)
+    if "imageUrl" in derived_fields or "metadata" in fields_csv.split(","):
+        payload = _inject_derived_image_url_in_collection(
+            payload=payload, client=client, account_id=account_id,
+            api_version=settings.api_version, include_image="imageUrl" in derived_fields,
+        )
 
     response_fields_csv = output_fields_csv if output_fields_csv is not None else fields_csv
     return build_collection_response(
@@ -114,11 +120,17 @@ def get_creative(
         default_fields=DEFAULT_CREATIVE_FIELDS,
         allowed_fields=ALLOWED_CREATIVE_FIELDS,
     )
+    _validate_metadata_version(fields_csv, settings.api_version)
 
-    payload = client.get_json(
-        f"adAccounts/{account_id}/creatives/{creative_path}",
-        params={},
-    )
+    query_fields = fields_csv.split(",")
+    if "imageUrl" in derived_fields and settings.api_version >= "202610":
+        query_fields.append("metadata")
+    params = {"fields": ",".join(dict.fromkeys(query_fields))} if "metadata" in query_fields else {}
+
+    path = f"adAccounts/{account_id}/creatives/{creative_path}"
+    if params:
+        path += f"?{_raw_query(params)}"
+    payload = client.get_json(path, params={})
     if "imageUrl" in derived_fields and isinstance(payload, Mapping):
         payload = _inject_derived_image_url_in_entity(payload=payload, client=client)
 
@@ -181,12 +193,21 @@ def _prepare_requested_fields(value: Any) -> tuple[Any, str | None, set[str]]:
     return api_fields, output_fields_csv, derived_fields
 
 
-def _inject_derived_image_url_in_collection(*, payload: dict[str, Any], client: LinkedInClient) -> dict[str, Any]:
+def _validate_metadata_version(fields_csv: str, api_version: str) -> None:
+    if "metadata" in fields_csv.split(",") and api_version < "202610":
+        raise ValueError("Creative metadata requires LINKEDIN_API_VERSION=202610 or later")
+
+
+def _inject_derived_image_url_in_collection(
+    *, payload: dict[str, Any], client: LinkedInClient, account_id: str,
+    api_version: str, include_image: bool,
+) -> dict[str, Any]:
     elements = payload.get("elements")
     if not isinstance(elements, list):
         return payload
 
     content_reference_cache: dict[str, str | None] = {}
+    metadata_cache: dict[str, Any] = {}
     normalized_elements: list[Any] = []
     for item in elements:
         if not isinstance(item, Mapping):
@@ -194,11 +215,21 @@ def _inject_derived_image_url_in_collection(*, payload: dict[str, Any], client: 
             continue
 
         row = dict(item)
-        row["imageUrl"] = _resolve_image_url_for_creative(
-            creative=row,
-            client=client,
-            content_reference_cache=content_reference_cache,
-        )
+        if api_version >= "202610" and row.get("id"):
+            creative_urn = normalize_creative_urn(str(row["id"]))
+            if creative_urn not in metadata_cache:
+                # Finders don't return CreativeMetadata; fetch it per creative only on demand.
+                entity = client.get_json(
+                    f"adAccounts/{account_id}/creatives/{quote(creative_urn, safe='')}?fields=id,metadata",
+                    params={},
+                )
+                metadata_cache[creative_urn] = entity.get("metadata")
+            if metadata_cache[creative_urn] is not None:
+                row["metadata"] = metadata_cache[creative_urn]
+        if include_image:
+            row["imageUrl"] = _resolve_image_url_for_creative(
+                creative=row, client=client, content_reference_cache=content_reference_cache,
+            )
         normalized_elements.append(row)
 
     payload["elements"] = normalized_elements
@@ -221,6 +252,11 @@ def _resolve_image_url_for_creative(
     client: LinkedInClient,
     content_reference_cache: dict[str, str | None],
 ) -> str | None:
+    metadata = creative.get("metadata")
+    if isinstance(metadata, Mapping):
+        asset_url = metadata.get("assetURL")
+        if isinstance(asset_url, str) and _looks_like_image_url(asset_url):
+            return asset_url
     direct_url = _find_image_url(creative.get("content"))
     if direct_url:
         return direct_url
@@ -241,6 +277,13 @@ def _extract_content_reference(content: Any) -> str | None:
     if not isinstance(content, Mapping):
         return None
     reference = content.get("reference")
+    if reference is None:
+        for key in ("standardUpdateAd", "videoAd"):
+            nested = content.get(key)
+            if isinstance(nested, Mapping):
+                reference = nested.get("reference")
+                if reference:
+                    break
     if not isinstance(reference, str):
         return None
     clean_reference = reference.strip()
@@ -250,7 +293,7 @@ def _extract_content_reference(content: Any) -> str | None:
 
 
 def _resolve_image_url_from_content_reference(*, client: LinkedInClient, content_reference: str) -> str | None:
-    if content_reference.startswith("urn:li:share:"):
+    if content_reference.startswith(("urn:li:share:", "urn:li:ugcPost:")):
         return _resolve_image_url_from_share_reference(client=client, share_reference=content_reference)
     if content_reference.startswith("urn:li:adDirectSponsoredContent:"):
         return _resolve_image_url_from_ad_direct_sponsored_content_reference(
@@ -261,16 +304,15 @@ def _resolve_image_url_from_content_reference(*, client: LinkedInClient, content
 
 
 def _resolve_image_url_from_share_reference(*, client: LinkedInClient, share_reference: str) -> str | None:
-    share_path = quote(share_reference, safe="")
-    for path in (f"shares/{share_path}", f"posts/{share_path}"):
-        try:
-            payload = client.get_json(path, params={})
-        except LinkedInAdsError:
-            continue
-        image_url = _find_image_url(payload)
-        if image_url:
-            return image_url
-    return None
+    try:
+        payload, _ = _fetch_share_payload(client=client, share_urn=share_reference)
+        urls, _ = _extract_image_urls(payload)
+        if urls:
+            return urls[0]
+        urls = _resolve_image_urns(payload, client=client)
+        return urls[0] if urls else None
+    except LinkedInAdsError:
+        return None
 
 
 def _resolve_image_url_from_ad_direct_sponsored_content_reference(
@@ -321,6 +363,8 @@ def _looks_like_image_url(value: str) -> bool:
     if not lower.startswith(("https://", "http://")):
         return False
     without_query = lower.split("?", 1)[0]
+    if without_query.endswith((".mp4", ".mov", ".webm", ".pdf")):
+        return False
     if without_query.endswith((".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif", ".svg")):
         return True
     if "media.licdn.com" in lower:

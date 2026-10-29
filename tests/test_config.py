@@ -37,7 +37,7 @@ def test_load_config_uses_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = load_config()
 
     assert settings.access_token == "token"
-    assert settings.api_version == "202603"
+    assert settings.api_version == "202610"
     assert settings.restli_protocol_version == "2.0.0"
     assert settings.timeout_seconds == 30.0
     assert settings.max_retries == 3

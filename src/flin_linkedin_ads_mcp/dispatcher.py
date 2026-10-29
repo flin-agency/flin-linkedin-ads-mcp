@@ -7,6 +7,7 @@ from .guards import assert_read_only_tool
 from .linkedin_client import LinkedInClient
 from .tools.account_intelligence import list_account_intelligence
 from .tools.accounts import get_ad_account, list_ad_accounts
+from .tools.ad_library import search_ad_library, search_brand_partnerships
 from .tools.campaign_groups import get_campaign_group, list_campaign_groups
 from .tools.campaigns import get_campaign, list_campaigns
 from .tools.creatives import get_creative, list_creatives
@@ -16,6 +17,12 @@ from .tools.share_content import get_share_content
 ToolHandler = Callable[[LinkedInClient, LinkedInAdsSettings, dict[str, Any]], dict[str, Any]]
 
 TOOL_HANDLERS: dict[str, ToolHandler] = {
+    "search_ad_library": lambda client, settings, arguments: search_ad_library(
+        client=client, settings=settings, arguments=arguments,
+    ),
+    "search_brand_partnerships": lambda client, settings, arguments: search_brand_partnerships(
+        client=client, settings=settings, arguments=arguments,
+    ),
     "list_ad_accounts": lambda client, settings, arguments: list_ad_accounts(
         client=client,
         settings=settings,

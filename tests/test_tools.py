@@ -636,7 +636,7 @@ def test_get_creative_resolves_image_url_from_share_reference(settings: LinkedIn
                     "id": "urn:li:sponsoredCreative:935973186",
                     "content": {"reference": "urn:li:share:123"},
                 }
-            if path == "shares/urn%3Ali%3Ashare%3A123":
+            if path == "posts/urn%3Ali%3Ashare%3A123":
                 return {
                     "content": {
                         "contentEntities": [
@@ -663,7 +663,7 @@ def test_get_creative_resolves_image_url_from_share_reference(settings: LinkedIn
         "id": "urn:li:sponsoredCreative:935973186",
         "imageUrl": "https://media.licdn.com/dms/image/C4D12AQF/from-share.png",
     }
-    assert any(path == "shares/urn%3Ali%3Ashare%3A123" for path, _ in client.calls)
+    assert any(path == "posts/urn%3Ali%3Ashare%3A123" for path, _ in client.calls)
 
 
 def test_get_creative_resolves_image_url_from_ad_direct_sponsored_content_reference(
@@ -809,7 +809,7 @@ def test_get_share_content_extracts_image_url(settings: LinkedInAdsSettings) -> 
     class ShareContentClient(DummyClient):
         def get_json(self, path: str, params: dict | None) -> dict:
             self.calls.append((path, dict(params or {})))
-            if path == "shares/urn%3Ali%3Ashare%3A7379073146093568000":
+            if path == "posts/urn%3Ali%3Ashare%3A7379073146093568000":
                 return {
                     "id": "urn:li:share:7379073146093568000",
                     "commentary": {"text": "Creative post text"},
@@ -837,7 +837,7 @@ def test_get_share_content_extracts_image_url(settings: LinkedInAdsSettings) -> 
     assert result["ok"] is True
     assert result["data"] == {
         "share_urn": "urn:li:share:7379073146093568000",
-        "source_endpoint": "shares",
+        "source_endpoint": "posts",
         "post_url": "https://www.linkedin.com/feed/update/urn:li:share:7379073146093568000",
         "text": "Creative post text",
         "image_url": "https://media.licdn.com/dms/image/D5603AQH/share-thumb.jpg",
@@ -846,47 +846,33 @@ def test_get_share_content_extracts_image_url(settings: LinkedInAdsSettings) -> 
     }
 
 
-def test_get_share_content_falls_back_to_posts_endpoint(settings: LinkedInAdsSettings) -> None:
-    class ShareFallbackClient(DummyClient):
+def test_get_share_content_uses_posts_without_retired_shares(settings: LinkedInAdsSettings) -> None:
+    class PostsClient(DummyClient):
         def get_json(self, path: str, params: dict | None) -> dict:
             self.calls.append((path, dict(params or {})))
-            if path == "shares/urn%3Ali%3Ashare%3A7379073146093568000":
-                raise LinkedInValidationError(
-                    "Not found",
-                    status_code=404,
-                    details={"status_code": 404, "error": {"message": "Not found"}},
-                )
-            if path == "posts/urn%3Ali%3Ashare%3A7379073146093568000":
-                return {
-                    "id": "urn:li:share:7379073146093568000",
-                    "commentary": {"text": "Fallback text"},
-                    "content": {
-                        "media": {"url": "https://media.licdn.com/dms/image/C5605AQH/post-image.png"}
-                    },
-                }
-            return super().get_json(path, params)
+            assert path == "posts/urn%3Ali%3Ashare%3A7379073146093568000"
+            return {
+                "id": "urn:li:share:7379073146093568000",
+                "commentary": "Modern post text",
+                "content": {"media": {"url": "https://media.licdn.com/dms/image/post.png"}},
+            }
 
-    client = ShareFallbackClient(calls=[])
-
+    client = PostsClient(calls=[])
     result = get_share_content(
-        client=client,
-        settings=settings,
+        client=client, settings=settings,
         arguments={"share_urn": "urn:li:share:7379073146093568000"},
     )
-
-    assert result["ok"] is True
     assert result["data"]["source_endpoint"] == "posts"
-    assert result["data"]["image_url"] == "https://media.licdn.com/dms/image/C5605AQH/post-image.png"
-    called_paths = [path for path, _ in client.calls]
-    assert called_paths[0] == "shares/urn%3Ali%3Ashare%3A7379073146093568000"
-    assert called_paths[1] == "posts/urn%3Ali%3Ashare%3A7379073146093568000"
+    assert result["data"]["text"] == "Modern post text"
+    assert result["data"]["image_url"] == "https://media.licdn.com/dms/image/post.png"
+    assert len(client.calls) == 1
 
 
 def test_get_share_content_include_raw_payload(settings: LinkedInAdsSettings) -> None:
     class ShareRawClient(DummyClient):
         def get_json(self, path: str, params: dict | None) -> dict:
             self.calls.append((path, dict(params or {})))
-            if path == "shares/urn%3Ali%3Ashare%3A7379073146093568000":
+            if path == "posts/urn%3Ali%3Ashare%3A7379073146093568000":
                 return {"id": "urn:li:share:7379073146093568000", "commentary": {"text": "Raw text"}}
             return super().get_json(path, params)
 

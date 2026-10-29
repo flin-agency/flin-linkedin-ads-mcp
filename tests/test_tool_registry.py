@@ -20,6 +20,8 @@ def test_tool_registry_exposes_expected_read_only_tools() -> None:
         "get_share_content",
         "get_insights",
         "list_account_intelligence",
+        "search_ad_library",
+        "search_brand_partnerships",
     ]
 
 

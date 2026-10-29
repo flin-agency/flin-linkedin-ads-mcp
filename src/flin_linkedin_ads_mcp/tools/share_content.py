@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Mapping
 from urllib.parse import quote
 
 from ..config import LinkedInAdsSettings
-from ..errors import LinkedInValidationError
 from ..linkedin_client import LinkedInClient
-from .common import build_entity_response, normalize_share_urn
+from .common import build_entity_response
 
 
 def get_share_content(
@@ -15,12 +15,19 @@ def get_share_content(
     settings: LinkedInAdsSettings,
     arguments: dict[str, Any],
 ) -> dict[str, Any]:
-    share_urn = normalize_share_urn(arguments["share_urn"], parameter_name="share_urn")
+    share_urn = arguments["share_urn"]
+    if not isinstance(share_urn, str) or not re.fullmatch(
+        r"urn:li:(?:share|ugcPost):[0-9]+", share_urn.strip(),
+    ):
+        raise ValueError("share_urn must be a share URN or ugcPost URN")
+    share_urn = share_urn.strip()
     include_raw = _normalize_include_raw(arguments.get("include_raw"))
 
     payload, source_endpoint = _fetch_share_payload(client=client, share_urn=share_urn)
     text = _extract_text(payload)
     image_urls, thumbnail_urls = _extract_image_urls(payload)
+    for url in _resolve_image_urns(payload, client=client):
+        _append_unique(image_urls, url)
 
     response_payload: dict[str, Any] = {
         "share_urn": share_urn,
@@ -52,27 +59,36 @@ def _normalize_include_raw(value: Any) -> bool:
 
 def _fetch_share_payload(*, client: LinkedInClient, share_urn: str) -> tuple[dict[str, Any], str]:
     encoded_share_urn = quote(share_urn, safe="")
-    last_validation_error: LinkedInValidationError | None = None
+    payload = client.get_json(f"posts/{encoded_share_urn}", params={})
+    return dict(payload), "posts"
 
-    for endpoint in ("shares", "posts"):
-        path = f"{endpoint}/{encoded_share_urn}"
-        try:
-            payload = client.get_json(path, params={})
-        except LinkedInValidationError as exc:
-            last_validation_error = exc
-            continue
 
-        if isinstance(payload, Mapping):
-            return dict(payload), endpoint
-        return {}, endpoint
+def _resolve_image_urns(payload: Any, *, client: LinkedInClient) -> list[str]:
+    urns: list[str] = []
 
-    if last_validation_error is not None:
-        raise last_validation_error
-    raise RuntimeError("Unable to resolve share content")
+    def collect(value: Any) -> None:
+        if isinstance(value, Mapping):
+            for item in value.values():
+                collect(item)
+        elif isinstance(value, list):
+            for item in value:
+                collect(item)
+        elif isinstance(value, str) and re.fullmatch(r"urn:li:image:[A-Za-z0-9_-]+", value):
+            _append_unique(urns, value)
+
+    collect(payload)
+    urls: list[str] = []
+    for urn in urns:
+        image = client.get_json(f"images/{quote(urn, safe='')}", params={})
+        url = image.get("downloadUrl")
+        if isinstance(url, str) and url.startswith("https://"):
+            _append_unique(urls, url)
+    return urls
 
 
 def _extract_text(payload: Mapping[str, Any]) -> str | None:
     for path in (
+        ("commentary",),
         ("commentary", "text"),
         ("specificContent", "com.linkedin.ugc.ShareContent", "shareCommentary", "text"),
         ("shareCommentary", "text"),
@@ -164,6 +180,8 @@ def _looks_like_image_url(value: str) -> bool:
         return False
 
     without_query = lower.split("?", 1)[0]
+    if without_query.endswith((".mp4", ".mov", ".webm", ".pdf")):
+        return False
     if without_query.endswith((".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif", ".svg")):
         return True
     if "media.licdn.com" in lower:

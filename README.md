@@ -13,11 +13,25 @@ Er ist dafür gebaut, direkt in Claude über MCP eingebunden und getestet zu wer
 - Share-Content lesen (`get_share_content`, best effort für Bild-URLs)
 - Insights/Analytics lesen
 - Company Intelligence lesen (`/accountIntelligence`, private API Access nötig)
+- Öffentliche Anzeigen in der LinkedIn Ad Library suchen (`search_ad_library`)
+- Als Markenpartnerschaft gekennzeichnete Beiträge suchen (`search_brand_partnerships`)
 - Direkter LinkedIn-Login und Reconnect über `linkedin_login`
 - Automatische Token-Erneuerung, falls LinkedIn einen Refresh-Token ausstellt
-- Keine Schreiboperationen an Werbekonten oder Kampagnen in `v0.1.x`
+- Keine Schreiboperationen an Werbekonten oder Kampagnen in `v0.x`
 
-## Scope `v0.1.x` (strict read-only)
+## Neu in `v0.2.0`
+
+- Ad-Library-Suche und Markenpartnerschafts-Suche mit Filtern und Seitennavigation.
+- Anzeigenbilder über Creative-Metadaten ab API-Version `202610`, auch ohne Posts-Zugriff.
+- Aktuelle Posts-/Images-Abfragen statt des alten Share-Endpunkts.
+- API-Version `202610` als neuer Standard und verständliche Hinweise bei inaktiven Versionen.
+
+Bestehende Installationen mit explizitem `LINKEDIN_API_VERSION` müssen diesen Wert auf
+`202610` setzen, um die neue Bildauflösung zu nutzen. Anschliessend den MCP-Client neu starten.
+Die Ad Library benötigt eine separate Produktfreischaltung der LinkedIn App. Die Bildadressen
+bleiben externe URLs; eine Sperre externer Bilder im Dashboard wird dadurch nicht aufgehoben.
+
+## Scope `v0.x` (strict read-only)
 
 - Kein Create/Update/Delete
 - Kein Pause/Resume
@@ -49,7 +63,7 @@ In Claude:
         "LINKEDIN_CLIENT_ID": "DEINE_APP_CLIENT_ID",
         "LINKEDIN_CLIENT_SECRET": "DEIN_APP_CLIENT_SECRET",
         "LINKEDIN_REDIRECT_URI": "http://localhost:9876/callback",
-        "LINKEDIN_API_VERSION": "202603",
+        "LINKEDIN_API_VERSION": "202610",
         "LINKEDIN_RESTLI_PROTOCOL_VERSION": "2.0.0"
       }
     }
@@ -78,7 +92,7 @@ hat der gespeicherte OAuth-Token Vorrang vor einem alten Token aus der Konfigura
         "LINKEDIN_CLIENT_ID": "DEINE_APP_CLIENT_ID",
         "LINKEDIN_CLIENT_SECRET": "DEIN_APP_CLIENT_SECRET",
         "LINKEDIN_REDIRECT_URI": "http://localhost:9876/callback",
-        "LINKEDIN_API_VERSION": "202603",
+        "LINKEDIN_API_VERSION": "202610",
         "LINKEDIN_RESTLI_PROTOCOL_VERSION": "2.0.0"
       }
     }
@@ -125,6 +139,91 @@ Beispiel für einen stabilen Test-Call:
 }
 ```
 
+## LinkedIn Ad Library
+
+Voraussetzung ist das freigeschaltete Produkt **LinkedIn Ad Library** auf der App,
+die den verwendeten Mitgliedstoken ausgestellt hat. Ein vorhandener gültiger
+OAuth-Mitgliedstoken kann weiterverwendet werden; es ist **kein zusätzlicher OAuth-Scope**
+erforderlich. Beide Tools funktionieren ohne `ad_account_id` und ohne Zugriff auf
+das Werbekonto des gesuchten Unternehmens. Der bestehende Ads-Login bleibt unverändert.
+
+### `search_ad_library`
+
+Sucht über `GET /rest/adLibrary?q=criteria` nach öffentlichen Anzeigen, auch anderer Unternehmen.
+
+- `keyword`: Suchbegriffe im Anzeigeninhalt; mehrere Wörter werden mit UND verknüpft.
+- `advertiser`: Name des werbenden Unternehmens.
+- `payer_name`: Name der zahlenden Person oder Organisation.
+- `countries`: zweistellige Ländercodes, z. B. `["CH", "DE", "AT"]`.
+- `date_from` und `date_to`: gemeinsam im Format `YYYY-MM-DD`; Start inklusive,
+  **Ende exklusiv**. Ohne diese Angaben nutzt LinkedIn nur **heute minus 2 Tage bis
+  heute minus 1 Tag**, nicht das gesamte Archiv.
+- `included_targeting_categories` / `excluded_targeting_categories`: Targeting-Kategorien,
+  z. B. `["COMPANY", "JOB"]`; die verfügbaren Werte stehen im Tool-Schema.
+- `impressions_from` und `impressions_to`: gemeinsam als Impression-Bereich;
+  `1000000` bis `0` steht für die offene oberste Klasse ab einer Million.
+- `sort_order`: `ASCENDING` oder `DESCENDING`, sortiert nach Erstellungszeit der Anzeige.
+- `page_start`: Offset ab `0`; `page_size`: `1` bis `25`, Standard `25`.
+
+Beispiel für `search_ad_library`:
+
+```json
+{
+  "advertiser": "Microsoft",
+  "countries": ["DE", "AT"],
+  "date_from": "2026-10-01",
+  "date_to": "2026-10-29",
+  "page_size": 25
+}
+```
+
+Die Antwort behält die API-Felder unverändert bei: `adUrl`, `details` mit Inserent,
+Anzeigenformat, verfügbaren Targeting- und Impression-Daten sowie `isRestricted` und
+`restrictionDetails`. Umfang und Verfügbarkeit hängen von der Anzeige und Region ab;
+zusätzliche Transparenzdaten betreffen insbesondere EU-Anzeigen. Die API liefert
+Vorschaulinks, keine heruntergeladenen Anzeigenbilder oder vollständigen Anzeigentexte
+und keine Klick-, Kosten- oder Conversion-Berichte. Redaktionen bei eingeschränkten
+Anzeigen bleiben erhalten. Anzeigen bleiben üblicherweise ein Jahr nach ihrer letzten
+Impression in der Bibliothek.
+
+### `search_brand_partnerships`
+
+Sucht über `GET /rest/paidEndorsementPosts?q=searchCriteria` nach organischen Beiträgen,
+die Creators als Markenpartnerschaft gekennzeichnet haben. Die Antwort enthält `postUrl`.
+
+- `keyword`: Pflicht; mehrere Wörter werden mit UND verknüpft.
+- `date_range`: optional `PAST_24H`, `PAST_WEEK` oder `PAST_MONTH`; ohne Filter sind
+  verfügbare Beiträge bis maximal ein Jahr nach Veröffentlichung durchsuchbar.
+- `page_start` und `page_size`: wie bei der Anzeigensuche; der MCP begrenzt beide Tools
+  auf höchstens 25 Ergebnisse pro Aufruf.
+
+```json
+{
+  "keyword": "technology",
+  "date_range": "PAST_MONTH",
+  "page_size": 10
+}
+```
+
+### Weitere Seiten und Zugriffsfehler
+
+Beide Tools liefern `paging.next_start`, `paging.has_next` und, sofern von LinkedIn
+geliefert, `paging.total`. Für die nächste Seite dieselben Filter mit
+`page_start=paging.next_start` erneut aufrufen. `paging.next_after` enthält denselben
+Offset als String zur Kompatibilität mit dem bestehenden Antwortformat. Fehlen die
+Paging-Angaben, kann eine volle Seite einen abschliessenden leeren Aufruf erfordern.
+
+Bei `403` / `ACCESS_DENIED` prüfen, ob die MCP-Zugangsdaten zur **freigeschalteten App**
+gehören und das Produkt im Developer Portal aktiv ist. Ein gültiger Token oder der
+Status `token_available` allein bestätigt den Ad-Library-Zugriff nicht. Bei Bedarf
+über `linkedin_login` neu verbinden und die Suche wiederholen; eine fehlende
+Produktfreischaltung wird durch einen neuen Login nicht behoben.
+
+Offizielle Referenzen:
+[Zugang und Authentifizierung](https://www.linkedin.com/ad-library/api),
+[Anzeigen-Schema](https://www.linkedin.com/ad-library/api/ads),
+[Markenpartnerschaften-Schema](https://www.linkedin.com/ad-library/api/paid-endorsement-posts).
+
 ## `get_insights` Parameter (2026-03)
 
 Wichtigste Parameter:
@@ -151,9 +250,12 @@ Kompatibilität:
 
 Für Creative-Calls kann optional das Derived-Field `imageUrl` in `fields` angefordert werden.
 
-- `imageUrl` wird bevorzugt direkt aus dem Creative-`content` extrahiert.
+- Ab API-Version `202610` wird `imageUrl` bevorzugt aus `metadata.assetURL` der einzelnen Creative-Abfrage gelesen. Dafür ist kein Zugriff auf die Posts-API nötig.
+- `get_creative` fordert das Metadatum im selben Aufruf an; `list_creatives` macht nur bei angefordertem `imageUrl` oder `metadata` eine zusätzliche Abfrage je Creative (doppelte IDs werden pro Seite zwischengespeichert). Ohne diese Felder bleibt es bei einer Listenabfrage.
+- `metadata` kann zusätzlich in `fields` angefordert werden und enthält je nach Format u. a. `adHeadline`, `adIntroductionText`, `adFormat`, `assetURL` und `landingPage`. Auf älteren API-Versionen wird eine ausdrückliche Anfrage nach `metadata` mit einem Konfigurationshinweis abgelehnt.
+- Fehlt eine Bildadresse in den Metadaten, wird der Creative-`content` geprüft.
 - Falls dort keine Bild-URL enthalten ist und eine `content.reference` auf `urn:li:adDirectSponsoredContent:*` zeigt, versucht der MCP zusätzlich eine Auflösung über `adDirectSponsoredContents/{urn}`.
-- Falls dort keine Bild-URL enthalten ist und eine Share-Referenz vorhanden ist, versucht der MCP zusätzlich eine Auflösung über die referenzierte Share/Post-Entity.
+- Falls dort keine Bild-URL enthalten ist und eine Share-/UGC-Post-Referenz vorhanden ist, versucht der MCP zusätzlich eine Auflösung über die aktuelle Posts-API und bei Bild-URNs über die Images-API. Auch verschachtelte Referenzen in `standardUpdateAd` und `videoAd` werden erkannt.
 - Wenn keine Bild-URL auflösbar ist, ist `imageUrl` `null`.
 
 Beispiel:
@@ -207,12 +309,12 @@ Neues Tool:
 
 Wichtige Parameter:
 
-- `share_urn` (Pflicht, Format `urn:li:share:<id>`)
+- `share_urn` (Pflicht, Format `urn:li:share:<id>` oder `urn:li:ugcPost:<id>`)
 - `include_raw` (optional, `true` gibt zusätzlich das rohe API-Payload zurück)
 
 Response enthält u. a.:
 
-- `share_urn`, `source_endpoint` (`shares` oder `posts`)
+- `share_urn`, `source_endpoint` (`posts`)
 - `post_url` (LinkedIn Feed URL)
 - `text`
 - `image_url` (erstes gefundenes Bild oder `null`)
@@ -226,6 +328,33 @@ Beispiel:
   "include_raw": false
 }
 ```
+
+## Anzeigenbilder und Dashboard-Einbettung
+
+Für Anzeigenbilder bevorzugt `get_creative` / `list_creatives` mit `fields: ["id", "imageUrl", "metadata"]`
+und `LINKEDIN_API_VERSION=202610` verwenden. Eine explizit auf `202603` oder älter gesetzte
+MCP-Konfiguration überschreibt weiterhin den neuen Default: dort den Wert ändern und den
+Server neu starten. Ein Paket-Update allein ändert diese Konfiguration nicht.
+
+`get_share_content` verwendet die aktuelle Posts-API. Der alte `/shares`-Endpunkt wird
+nicht mehr aufgerufen. Ein `403` an `/posts` oder `/images` bedeutet fehlende Berechtigungen
+für diese APIs, auch wenn die Ads-Abfragen funktionieren. Der Connector fordert dafür keine
+zusätzlichen Schreibberechtigungen an. Der Creative-Metadatenweg funktioniert unabhängig
+vom Posts-Zugriff. Ein `426` enthält nun einen Hinweis auf die konfigurierte Version und
+gegebenenfalls die nötige Endpoint-Migration, statt wie ein Login-Fehler behandelt zu werden.
+
+Die Bildadressen sind externe, möglicherweise zeitlich begrenzte LinkedIn-URLs. Wenn ein
+Dashboard externe Bilder blockiert, löst eine funktionierende URL diese Einschränkung
+nicht: Für eine Einbettung müssen die ausgewählten Bilder über den vom Dashboard erlaubten
+Import-/Asset-Workflow bereitgestellt werden. Der Connector exportiert oder lädt mit diesen
+Tools keine Bilddateien herunter und verändert keine Dashboard-Sicherheitsregeln.
+LinkedIn-Vorschaulinks bleiben eine mögliche Alternative. Eine `assetURL` kann je nach
+Anzeigenformat auch ein anderes Medium sein; erkennbare Video-/PDF-URLs werden nicht als
+`imageUrl` ausgegeben.
+
+Referenzen: [Creative-Metadaten](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/account-structure/create-and-manage-creatives?view=li-lms-2026-10),
+[Posts-API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api),
+[Images-API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/images-api).
 
 ## Troubleshooting `get_insights`
 
@@ -319,7 +448,7 @@ Ohne OAuth-App-Konfiguration kann dieser Token nicht automatisch erneuert werden
 
 Weitere Optionen:
 
-- `LINKEDIN_API_VERSION` (Default: `202603`)
+- `LINKEDIN_API_VERSION` (Default: `202610`)
 - `LINKEDIN_RESTLI_PROTOCOL_VERSION` (Default: `2.0.0`)
 - `LINKEDIN_TIMEOUT_SECONDS` (Default: `30`)
 - `LINKEDIN_MAX_RETRIES` (Default: `3`)

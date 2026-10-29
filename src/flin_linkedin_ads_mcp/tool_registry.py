@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .tools.ad_library import PARTNERSHIP_DATE_RANGES, TARGETING_CATEGORIES
+
 
 ACCOUNT_ID_PATTERN = "^(urn:li:sponsoredAccount:)?[0-9]+$"
 CAMPAIGN_GROUP_PATTERN = "^(urn:li:sponsoredCampaignGroup:)?[0-9]+$"
@@ -98,7 +100,11 @@ def tool_specs() -> list[ToolSpec]:
         ),
         ToolSpec(
             name="list_creatives",
-            description="List creatives for an ad account",
+            description=(
+                "List creatives for an ad account. Optional fields imageUrl and metadata use "
+                "one extra GET per creative on API 202610+. Image URLs are external and may expire; "
+                "restricted dashboards need approved embedded/local assets."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -121,7 +127,11 @@ def tool_specs() -> list[ToolSpec]:
         ),
         ToolSpec(
             name="get_creative",
-            description="Fetch one creative by id",
+            description=(
+                "Fetch one creative by id. Request fields imageUrl or metadata for the visual "
+                "asset URL via CreativeMetadata on API 202610+, without needing Posts access. "
+                "Image URLs are external and may expire."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -138,11 +148,15 @@ def tool_specs() -> list[ToolSpec]:
         ),
         ToolSpec(
             name="get_share_content",
-            description="Resolve LinkedIn share content and image URLs by share URN",
+            description=(
+                "Resolve LinkedIn share/ugcPost content via the Posts and Images APIs. Requires "
+                "their additional permissions. For ad images prefer get_creative with imageUrl "
+                "on API 202610+. External image URLs alone cannot bypass dashboard restrictions."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
-                    "share_urn": {"type": "string", "pattern": SHARE_URN_PATTERN},
+                    "share_urn": {"type": "string", "pattern": "^urn:li:(share|ugcPost):[0-9]+$"},
                     "include_raw": {"type": "boolean"},
                 },
                 "required": ["share_urn"],
@@ -266,6 +280,86 @@ def tool_specs() -> list[ToolSpec]:
                         "items": {"type": "string", "pattern": FIELD_PATTERN},
                     },
                 },
+                "additionalProperties": False,
+            },
+        ),
+    ] + _ad_library_specs()
+
+
+def _ad_library_specs() -> list[ToolSpec]:
+    pagination = {
+        "page_start": {
+            "type": "integer", "minimum": 0, "default": 0,
+            "description": "Offset; use paging.next_start for the next page with the same filters.",
+        },
+        "page_size": {"type": "integer", "minimum": 1, "maximum": 25, "default": 25},
+    }
+    text = {"type": "string", "minLength": 1}
+    targeting = {
+        "type": "array", "minItems": 1,
+        "items": {"type": "string", "enum": list(TARGETING_CATEGORIES)},
+    }
+    return [
+        ToolSpec(
+            name="search_ad_library",
+            description=(
+                "Search public LinkedIn ads, including other advertisers, by keyword, advertiser, "
+                "payer, country, dates, targeting categories and impression range. No ad account "
+                "required. Requires the LinkedIn Ad Library product on the token's app, with no "
+                "extra OAuth scope. Returns preview URLs and available transparency details; "
+                "no ad copy/media download, clicks or spend. Targeting/impression details depend "
+                "on availability (particularly EU ads). Without dates LinkedIn searches only "
+                "today-2 to today-1. date_to is exclusive. Multiple keywords use AND."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "keyword": dict(text), "advertiser": dict(text), "payer_name": dict(text),
+                    "countries": {
+                        "type": "array", "minItems": 1,
+                        "items": {"type": "string", "pattern": "^[A-Za-z]{2}$"},
+                        "description": "ISO two-letter country codes, e.g. CH, DE, AT.",
+                    },
+                    "date_from": {
+                        "type": "string", "pattern": DATE_PATTERN,
+                        "description": "Inclusive start; requires date_to.",
+                    },
+                    "date_to": {
+                        "type": "string", "pattern": DATE_PATTERN,
+                        "description": "Exclusive end; requires date_from.",
+                    },
+                    "included_targeting_categories": dict(targeting),
+                    "excluded_targeting_categories": dict(targeting),
+                    "impressions_from": {"type": "integer", "minimum": 0},
+                    "impressions_to": {
+                        "type": "integer", "minimum": 0,
+                        "description": "Requires impressions_from. Use 0 for an open upper bound (1M+).",
+                    },
+                    "sort_order": {
+                        "type": "string", "enum": ["ASCENDING", "DESCENDING"],
+                        "description": "Sort by ad creation time; LinkedIn defaults to DESCENDING.",
+                    },
+                    **pagination,
+                },
+                "additionalProperties": False,
+            },
+        ),
+        ToolSpec(
+            name="search_brand_partnerships",
+            description=(
+                "Search organic LinkedIn posts declared by creators as brand partnerships. "
+                "Returns post URLs. Requires the LinkedIn Ad Library product, no extra OAuth "
+                "scope or ad account. Multiple keywords use AND. Without date_range searches "
+                "available posts up to one year old."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "keyword": dict(text),
+                    "date_range": {"type": "string", "enum": list(PARTNERSHIP_DATE_RANGES)},
+                    **pagination,
+                },
+                "required": ["keyword"],
                 "additionalProperties": False,
             },
         ),
