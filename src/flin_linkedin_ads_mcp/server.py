@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 from typing import Any
@@ -11,6 +12,7 @@ from .dispatcher import dispatch_tool
 from .errors import AccountSelectionRequired, LinkedInAdsError
 from .response import error_response, selection_required_response
 from .tool_registry import tool_specs
+from .tools.media import MediaResult
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,7 @@ def create_server(settings: LinkedInAdsSettings | None = None, client: Any | Non
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any]) -> list[Any]:
         request_id = getattr(runtime_client, "last_request_id", None)
+        media_content: list[Any] = []
         try:
             if name in {"linkedin_login", "linkedin_login_status"}:
                 if arguments:
@@ -57,9 +60,26 @@ def create_server(settings: LinkedInAdsSettings | None = None, client: Any | Non
                     auth.login() if name == "linkedin_login" else auth.status()
                 )}
             else:
-                result = dispatch_tool(
+                dispatched = dispatch_tool(
                     name, arguments or {}, settings=resolved_settings, client=runtime_client
                 )
+                if isinstance(dispatched, MediaResult):
+                    result = dispatched.response
+                    data = result["data"]
+                    if dispatched.image is not None:
+                        media_content.append(mcp_types.ImageContent(
+                            type="image", data=base64.b64encode(dispatched.image).decode("ascii"),
+                            mimeType=data["mime_type"],
+                        ))
+                    if data.get("file_uri"):
+                        media_content.append(mcp_types.ResourceLink(
+                            type="resource_link", uri=data["file_uri"],
+                            name=data["sha256"] + "." + data["local_path"].rsplit(".", 1)[-1],
+                            mimeType=data["mime_type"], size=data["size_bytes"],
+                            description="Local media file on the MCP server; import for dashboard use",
+                        ))
+                else:
+                    result = dispatched
         except AccountSelectionRequired as exc:
             result = selection_required_response(
                 question=str(exc),
@@ -99,7 +119,8 @@ def create_server(settings: LinkedInAdsSettings | None = None, client: Any | Non
                 request_id=request_id,
             )
 
-        return [mcp_types.TextContent(type="text", text=json.dumps(result, separators=(",", ":"), sort_keys=True))]
+        content = [mcp_types.TextContent(type="text", text=json.dumps(result, separators=(",", ":"), sort_keys=True))]
+        return content + media_content if result.get("ok") else content
 
     return server
 

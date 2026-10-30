@@ -12,6 +12,7 @@ READ_ONLY_TOOL_NAMES = {
     "get_campaign",
     "list_creatives",
     "get_creative",
+    "get_creative_media",
     "get_share_content",
     "get_insights",
     "list_account_intelligence",

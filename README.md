@@ -10,6 +10,7 @@ Er ist dafür gebaut, direkt in Claude über MCP eingebunden und getestet zu wer
 - Campaign Groups lesen
 - Campaigns lesen
 - Creatives lesen
+- Bilder und Video-Vorschaubilder im Chat ausgeben und lokal herunterladen (`get_creative_media`)
 - Share-Content lesen (`get_share_content`, best effort für Bild-URLs)
 - Insights/Analytics lesen
 - Company Intelligence lesen (`/accountIntelligence`, private API Access nötig)
@@ -18,6 +19,14 @@ Er ist dafür gebaut, direkt in Claude über MCP eingebunden und getestet zu wer
 - Direkter LinkedIn-Login und Reconnect über `linkedin_login`
 - Automatische Token-Erneuerung, falls LinkedIn einen Refresh-Token ausstellt
 - Keine Schreiboperationen an Werbekonten oder Kampagnen in `v0.x`
+
+## Neu in `v0.3.0`
+
+- Neues Tool `get_creative_media`: Bilder und Video-Vorschaubilder direkt im Chat anzeigen
+  und als lokale Dateien für den Dashboard-Import speichern.
+- Vollständige MP4-Videos herunterladen, sofern der Zugang die Posts- und Videos-API erlaubt.
+- Konfigurierbarer Speicherort über `LINKEDIN_MEDIA_DIR`, begrenzte Dateigrössen und
+  geprüfte LinkedIn-CDN-Downloads ohne Weitergabe des API-Tokens.
 
 ## Neu in `v0.2.0`
 
@@ -29,7 +38,8 @@ Er ist dafür gebaut, direkt in Claude über MCP eingebunden und getestet zu wer
 Bestehende Installationen mit explizitem `LINKEDIN_API_VERSION` müssen diesen Wert auf
 `202610` setzen, um die neue Bildauflösung zu nutzen. Anschliessend den MCP-Client neu starten.
 Die Ad Library benötigt eine separate Produktfreischaltung der LinkedIn App. Die Bildadressen
-bleiben externe URLs; eine Sperre externer Bilder im Dashboard wird dadurch nicht aufgehoben.
+aus `get_creative` bleiben externe URLs. `get_creative_media` kann Dateien separat abrufen;
+für Dashboards ist anschliessend deren unterstützter Datei-/Asset-Import nötig.
 
 ## Scope `v0.x` (strict read-only)
 
@@ -347,7 +357,8 @@ Die Bildadressen sind externe, möglicherweise zeitlich begrenzte LinkedIn-URLs.
 Dashboard externe Bilder blockiert, löst eine funktionierende URL diese Einschränkung
 nicht: Für eine Einbettung müssen die ausgewählten Bilder über den vom Dashboard erlaubten
 Import-/Asset-Workflow bereitgestellt werden. Der Connector exportiert oder lädt mit diesen
-Tools keine Bilddateien herunter und verändert keine Dashboard-Sicherheitsregeln.
+URL-Tools keine Bilddateien herunter. Für einen Dateiabruf gibt es `get_creative_media`;
+Dashboard-Sicherheitsregeln bleiben unverändert.
 LinkedIn-Vorschaulinks bleiben eine mögliche Alternative. Eine `assetURL` kann je nach
 Anzeigenformat auch ein anderes Medium sein; erkennbare Video-/PDF-URLs werden nicht als
 `imageUrl` ausgegeben.
@@ -355,6 +366,51 @@ Anzeigenformat auch ein anderes Medium sein; erkennbare Video-/PDF-URLs werden n
 Referenzen: [Creative-Metadaten](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/account-structure/create-and-manage-creatives?view=li-lms-2026-10),
 [Posts-API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api),
 [Images-API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/images-api).
+
+## `get_creative_media`: Chat-Vorschau und Dateien für Dashboards
+
+Das Tool lädt das Medium einer zugänglichen Anzeige herunter. Standardmässig liefert es
+ein natives MCP-Bild für den Chat und speichert dieselbe Datei lokal. Bei einer Videoanzeige
+ist `kind: "preview"` das **Vorschaubild**, nicht die Videodatei. Die tatsächliche Darstellung
+des Bildes hängt vom MCP-Client ab.
+
+```json
+{
+  "ad_account_id": "508834004",
+  "id": "urn:li:sponsoredCreative:935973186",
+  "kind": "preview",
+  "output": "both"
+}
+```
+
+- `kind`: `preview` (Standard) für Bilder/Vorschaubilder, `video` für die vollständige MP4.
+- `output`: `inline` für ein MCP-Bild ohne lokale Datei, `file` für eine lokale Datei,
+  `both` (Standard) für beides. Videos unterstützen `file` und `both`; beide liefern eine
+  Datei und einen Dateiverweis, keinen nativen Video-Block.
+- Die Textantwort enthält `mime_type`, `size_bytes`, `sha256` und bei Dateiausgabe
+  `local_path` / `file_uri`. Bilddaten werden separat als MCP `ImageContent` ausgegeben,
+  nicht als Base64 im Antworttext.
+- Speicherort: `~/.cache/flin-linkedin-ads-mcp/media`, konfigurierbar mit `LINKEDIN_MEDIA_DIR`.
+  Dateien erhalten inhaltsbasierte Namen und private Dateirechte. Der lokale Bestand wird
+  nicht automatisch gelöscht; nicht mehr benötigte Dateien können dort entfernt werden.
+- Die Dateien liegen auf dem Rechner des MCP-Servers. Für ein Dashboard müssen sie über
+  dessen unterstützten Asset-Import übernommen werden. Ein lokaler Pfad ist keine öffentliche
+  Bildadresse und kein automatischer Upload; entfernte Clients brauchen einen Datei-Transfer.
+- Unterstützt: JPEG, PNG, GIF, WebP bis 5 MiB; MP4 bis 100 MiB. Dateityp und Dateisignatur
+  werden geprüft. Downloads und Weiterleitungen sind auf HTTPS-LinkedIn-CDN-Adressen
+  beschränkt; der API-Token wird nicht an den CDN-Server gesendet.
+- Vollständige Videos werden über den referenzierten Post und die Videos-API aufgelöst.
+  Dafür sind die jeweiligen Leseberechtigungen nötig. Ein `403` nennt `kind: "preview"`
+  als Alternative. Das Tool gibt niemals ein JPEG als erfolgreich heruntergeladenes Video aus.
+- Medienadressen können ablaufen; jeder Aufruf löst sie erneut auf. Bei einem Downloadfehler
+  den Aufruf wiederholen. Der Connector verändert weiterhin keine LinkedIn-Ads-Daten.
+
+Nach Installation des aktualisierten Codes den MCP-Client neu starten, damit das neue Tool
+sichtbar wird. Ein bereits installiertes veröffentlichtes Paket erhält lokale Änderungen nicht
+automatisch.
+
+Referenzen: [Videos-API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/videos-api),
+[MCP-Bilder und Dateiverweise](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
 
 ## Troubleshooting `get_insights`
 

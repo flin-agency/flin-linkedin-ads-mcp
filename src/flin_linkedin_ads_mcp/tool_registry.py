@@ -147,6 +147,29 @@ def tool_specs() -> list[ToolSpec]:
             },
         ),
         ToolSpec(
+            name="get_creative_media",
+            description=(
+                "Download an authorized creative's image or video thumbnail (kind=preview), "
+                "or full MP4 (kind=video, requires Posts and Videos API access). "
+                "output=inline returns a native MCP image; file saves locally; both does both "
+                "for previews and saves a file for videos. Defaults: preview, both. "
+                "Limits: images 5 MiB, videos 100 MiB. Files are on the MCP server's computer, "
+                "not hosted URLs; use the dashboard's supported asset import. "
+                "Rendering depends on the client. Downloads write only local files, never Ads data."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "ad_account_id": {"type": "string", "pattern": ACCOUNT_ID_PATTERN},
+                    "id": {"type": "string", "pattern": CREATIVE_PATTERN},
+                    "kind": {"type": "string", "enum": ["preview", "video"], "default": "preview"},
+                    "output": {"type": "string", "enum": ["inline", "file", "both"], "default": "both"},
+                },
+                "required": ["id"],
+                "additionalProperties": False,
+            },
+        ),
+        ToolSpec(
             name="get_share_content",
             description=(
                 "Resolve LinkedIn share/ugcPost content via the Posts and Images APIs. Requires "

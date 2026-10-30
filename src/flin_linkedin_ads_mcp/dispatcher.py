@@ -13,10 +13,14 @@ from .tools.campaigns import get_campaign, list_campaigns
 from .tools.creatives import get_creative, list_creatives
 from .tools.insights import get_insights
 from .tools.share_content import get_share_content
+from .tools.media import MediaResult, get_creative_media
 
-ToolHandler = Callable[[LinkedInClient, LinkedInAdsSettings, dict[str, Any]], dict[str, Any]]
+ToolHandler = Callable[[LinkedInClient, LinkedInAdsSettings, dict[str, Any]], dict[str, Any] | MediaResult]
 
 TOOL_HANDLERS: dict[str, ToolHandler] = {
+    "get_creative_media": lambda client, settings, arguments: get_creative_media(
+        client=client, settings=settings, arguments=arguments,
+    ),
     "search_ad_library": lambda client, settings, arguments: search_ad_library(
         client=client, settings=settings, arguments=arguments,
     ),
@@ -87,7 +91,7 @@ def dispatch_tool(
     *,
     settings: LinkedInAdsSettings,
     client: LinkedInClient,
-) -> dict[str, Any]:
+) -> dict[str, Any] | MediaResult:
     assert_read_only_tool(name)
     try:
         handler = TOOL_HANDLERS[name]

@@ -16,6 +16,9 @@ class LinkedInAdsSettings:
     restli_protocol_version: str
     timeout_seconds: float
     max_retries: int
+    media_dir: Path = field(
+        default_factory=lambda: Path.home() / ".cache/flin-linkedin-ads-mcp/media"
+    )
     client_id: str = ""
     client_secret: str = field(default="", repr=False)
     redirect_uri: str = "http://localhost:9876/callback"
@@ -40,6 +43,9 @@ def load_config(env: Mapping[str, str] | None = None) -> LinkedInAdsSettings:
         restli_protocol_version=source.get("LINKEDIN_RESTLI_PROTOCOL_VERSION", "2.0.0"),
         timeout_seconds=float(source.get("LINKEDIN_TIMEOUT_SECONDS", "30")),
         max_retries=int(source.get("LINKEDIN_MAX_RETRIES", "3")),
+        media_dir=Path(source.get(
+            "LINKEDIN_MEDIA_DIR", str(Path.home() / ".cache/flin-linkedin-ads-mcp/media")
+        )).expanduser(),
         client_id=client_id,
         client_secret=client_secret,
         redirect_uri=redirect_uri,
