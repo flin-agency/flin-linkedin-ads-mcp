@@ -63,12 +63,40 @@ jobs:
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             mkdir "$RUNNER_TEMP/existing-release"
             gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/existing-release"
-            for file in dist/*; do
-              existing="$RUNNER_TEMP/existing-release/$(basename "$file")"
-              if [ -f "$existing" ]; then
-                cmp "$file" "$existing"
-              fi
-            done
+            python3 - <<'PYCODE'
+          import os
+          from pathlib import Path
+          import shutil
+          import tarfile
+
+          def source_files(path):
+              result = {}
+              with tarfile.open(path, "r:gz") as archive:
+                  for member in archive.getmembers():
+                      if member.isdir():
+                          continue
+                      if not member.isfile() or member.name in result:
+                          raise SystemExit(f"Unsupported or duplicate source entry: {member.name}")
+                      result[member.name] = (archive.extractfile(member).read(), member.mode & 0o111)
+              return result
+
+          for built in Path("dist").iterdir():
+              existing = Path(os.environ["RUNNER_TEMP"]) / "existing-release" / built.name
+              if not existing.exists() or built.read_bytes() == existing.read_bytes():
+                  continue
+              if built.name.endswith(".tar.gz"):
+                  current, published = source_files(built), source_files(existing)
+                  changed = sorted(name for name in current.keys() | published.keys()
+                                   if current.get(name) != published.get(name))
+                  if not changed:
+                      # Compression/tar metadata can vary across OS/Python versions.
+                      # Preserve the exact previously published bytes after checking all source files.
+                      shutil.copyfile(existing, built)
+                      print(f"Identical source contents; preserving published archive: {built.name}")
+                      continue
+                  print("Different source entries:", changed)
+              raise SystemExit(f"Existing release content differs: {built.name}")
+          PYCODE
           fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

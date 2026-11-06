@@ -582,8 +582,9 @@ beider Veröffentlichungen als abgeschlossen.
 Eine unterbrochene Veröffentlichung kann über **Actions → Release → Run workflow** mit
 `release_tag` (z. B. `v0.3.1`) nachgeholt werden. Der Workflow verwendet den unveränderten
 Tag, überspringt bereits auf PyPI vorhandene Dateien nur mit anschliessender Hash-Prüfung
-und ersetzt keine bestehenden GitHub-Dateien. Unterschiedliche Artefakte führen zu einem
-Fehler. Veröffentlichten Code nicht nachträglich unter demselben Tag ändern.
+und ersetzt keine bestehenden GitHub-Dateien. Abweichende Dateiinhalte führen zu einem Fehler. Bei identischen Quellarchiv-Inhalten
+und lediglich anderer Archivierung werden die bereits veröffentlichten Originalbytes
+weiterverwendet. Veröffentlichten Code nicht nachträglich unter demselben Tag ändern.
 
 ### PyPI Trusted Publisher einmalig einrichten
 
