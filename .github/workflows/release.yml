@@ -64,6 +64,7 @@ jobs:
             mkdir "$RUNNER_TEMP/existing-release"
             gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/existing-release"
             python3 - <<'PYCODE'
+          import hashlib
           import os
           from pathlib import Path
           import shutil
@@ -77,7 +78,15 @@ jobs:
                           continue
                       if not member.isfile() or member.name in result:
                           raise SystemExit(f"Unsupported or duplicate source entry: {member.name}")
-                      result[member.name] = (archive.extractfile(member).read(), member.mode & 0o111)
+                      content = archive.extractfile(member).read()
+                      # v0.3.1's local sdist included one ignored worktree example file.
+                      # It contains only REPLACE_ME, not a credential. Preserve the published
+                      # archive only for this exact path and verified harmless template hash.
+                      if (member.name == "flin_linkedin_ads_mcp-0.3.1/.worktrees/mcp-v1-hotfix/.env.example"
+                              and hashlib.sha256(content).hexdigest()
+                              == "a3ec72e8921ea40875701696d5c47b0a49a10974db17da17711f34d6080913ac"):
+                          continue
+                      result[member.name] = (content, member.mode & 0o111)
               return result
 
           for built in Path("dist").iterdir():
