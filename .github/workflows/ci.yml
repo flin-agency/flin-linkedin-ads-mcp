@@ -13,36 +13,37 @@ env:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
-
+        include:
+          - os: ubuntu-latest
+            python: "3.11"
+          - os: ubuntu-latest
+            python: "3.12"
+          - os: macos-latest
+            python: "3.13"
+    runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: pyproject.toml
-
-      - name: Install package with dev extras
+          version: "0.10.11"
+          python-version: ${{ matrix.python }}
+      - name: Install locked dependencies
+        run: uv sync --locked --extra dev
+      - name: Quality gates
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]" build
-
-      - name: Lint
-        run: ruff check .
-
-      - name: Type check
-        run: mypy src
-
-      - name: Test
-        run: pytest -q
-
-      - name: Build package
-        run: python -m build
+          uv run --locked ruff check .
+          uv run --locked mypy src
+          uv run --locked pytest -q
+      - name: Build distributions and desktop extension
+        run: |
+          uv run --locked python -m build
+          uv run --locked python scripts/build_desktop_extension.py
+          uv run --locked python scripts/smoke_desktop_extension.py
+      - name: Audit locked runtime dependencies
+        if: matrix.python == '3.12'
+        run: |
+          uv export --project desktop-extension --locked --no-dev --no-emit-project --output-file runtime-requirements.txt > /dev/null
+          uv run --locked pip-audit -r runtime-requirements.txt --no-deps --disable-pip

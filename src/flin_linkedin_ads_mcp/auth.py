@@ -161,6 +161,16 @@ class LinkedInAuth:
         with self._lock:
             self._rejected = True
 
+    def redact(self, text: str) -> str:
+        """Remove known credentials from provider error messages before returning them."""
+        with self._lock:
+            values = [self.settings.access_token, self.settings.client_secret,
+                      self._tokens.get("access_token"), self._tokens.get("refresh_token")]
+            for value in sorted((v for v in values if v), key=len, reverse=True):
+                text = text.replace(value, "[REDACTED]")
+                text = text.replace(json.dumps(value)[1:-1], "[REDACTED]")
+        return text
+
     def status(self) -> dict[str, Any]:
         with self._lock:
             expiry = self._tokens.get("expires_at")

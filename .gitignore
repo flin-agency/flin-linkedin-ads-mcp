@@ -4,9 +4,13 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .venv/
-uv.lock
 dist/
 build/
 *.egg-info/
 .DS_Store
 .env
+.env.*
+!.env.example
+tokens.json
+*.pem
+*.key

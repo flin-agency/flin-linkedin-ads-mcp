@@ -127,7 +127,7 @@ def _download(url: str, *, kind: str, timeout: float) -> tuple[bytes, str]:
         with httpx.Client(timeout=timeout, follow_redirects=False) as http:
             for _ in range(4):
                 _validate_url(url)
-                with http.stream("GET", url) as response:
+                with http.stream("GET", url, headers={"Accept-Encoding": "identity"}) as response:
                     if response.status_code in (301, 302, 303, 307, 308):
                         location = response.headers.get("location")
                         if not location:
@@ -139,6 +139,8 @@ def _download(url: str, *, kind: str, timeout: float) -> tuple[bytes, str]:
                             "Media download failed. Retry the tool to obtain a fresh URL.",
                             status_code=response.status_code,
                         )
+                    if response.headers.get("content-encoding", "identity").lower() != "identity":
+                        raise LinkedInValidationError("Compressed media responses are not accepted")
                     mime = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
                     prefix = "image/" if kind == "preview" else "video/"
                     if mime not in EXTENSIONS or not mime.startswith(prefix):
@@ -155,9 +157,9 @@ def _download(url: str, *, kind: str, timeout: float) -> tuple[bytes, str]:
                         raise LinkedInValidationError("Downloaded file does not match its media type")
                     return bytes(body), mime
             raise LinkedInAPIError("Too many media redirects")
-    except httpx.HTTPError as exc:
+    except httpx.HTTPError:
         # HTTP exceptions can include signed URLs: keep them out of tool output/logs.
-        raise LinkedInAPIError("Media download failed due to a network error; retry the tool") from exc
+        raise LinkedInAPIError("Media download failed due to a network error; retry the tool") from None
 
 
 def _matches_type(body: bytes | bytearray, mime: str) -> bool:

@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "German documentation placeholder, never a real credential"
+regexTarget = "match"
+regexes = ['''Authorization: Bearer DEIN_ACCESS_TOKEN''']

@@ -205,3 +205,15 @@ def test_inline_video_is_rejected_before_api_calls(setup):
     with pytest.raises(ValueError, match="output=file"):
         call(setup, kind="video", output="inline")
     assert not respx.calls
+
+
+@respx.mock
+def test_compressed_download_rejected_before_decoding(setup):
+    import gzip
+    mock_preview()
+    respx.get(IMAGE_URL).respond(200, content=gzip.compress(PNG), headers={
+        "content-type": "image/png", "content-encoding": "gzip",
+    })
+    with pytest.raises(LinkedInValidationError, match="Compressed"):
+        call(setup)
+    assert not setup[1].media_dir.exists()

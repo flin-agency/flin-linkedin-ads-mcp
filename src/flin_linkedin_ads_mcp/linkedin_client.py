@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import time
 from typing import Any, Mapping
-from urllib.parse import parse_qsl, urlsplit
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 import httpx
 
@@ -72,6 +72,8 @@ class LinkedInClient:
         params: Mapping[str, Any] | None = None,
         json_body: Mapping[str, Any] | None = None,
     ) -> _RequestResult:
+        if method != "GET" or json_body is not None:
+            raise PermissionError("Only GET without a body is allowed in strict read-only mode")
         url = self._build_url(path)
         request_params = dict(params) if params else None
         request_headers = {
@@ -86,16 +88,18 @@ class LinkedInClient:
         attempts = 0
         refreshed = False
         while True:
-            response = self._client.request(
-                method,
-                url,
-                params=request_params,
-                headers=request_headers,
-                json=dict(json_body or {}) if json_body is not None else None,
-            )
+            try:
+                response = self._client.request(
+                    method, url, params=request_params, headers=request_headers,
+                    follow_redirects=False,
+                )
+            except httpx.HTTPError:
+                raise LinkedInAPIError("LinkedIn request failed due to a network error") from None
             request_id = self._request_id_from_response(response)
 
-            if response.status_code < 400:
+            if 300 <= response.status_code < 400:
+                raise LinkedInAPIError("LinkedIn API redirects are not allowed")
+            if response.status_code < 300:
                 payload = response.json() if response.content else {}
                 return _RequestResult(payload=payload if isinstance(payload, dict) else {}, request_id=request_id)
 
@@ -116,6 +120,13 @@ class LinkedInClient:
 
     @staticmethod
     def _build_url(path: str) -> str:
+        parsed = urlsplit(path)
+        decoded_path = unquote(parsed.path)
+        if (parsed.scheme or parsed.netloc or parsed.fragment
+                or "\\" in decoded_path or "%" in decoded_path
+                or any(part in {".", ".."} for part in decoded_path.split("/"))
+                or any(ord(char) < 32 for char in path)):
+            raise ValueError("Expected a relative LinkedIn REST path without traversal")
         clean_path = path.lstrip("/")
         return f"https://api.linkedin.com/rest/{clean_path}"
 
@@ -147,6 +158,10 @@ class LinkedInClient:
             "status_code": response.status_code,
             "error": payload,
         }
+        # Provider errors can echo credentials. Sanitize nested fields as well as messages.
+        message = self._redact(message)
+        details = self._redact_value(details)
+        request_id = self._redact(request_id) if request_id else None
 
         if response.status_code == 426:
             details.update(
@@ -199,6 +214,20 @@ class LinkedInClient:
             request_id=request_id,
             details=details,
         )
+
+    def _redact(self, text: str) -> str:
+        if self.access_token:
+            text = text.replace(self.access_token, "[REDACTED]")
+        return self.auth.redact(text) if self.auth else text
+
+    def _redact_value(self, value: Any) -> Any:
+        if isinstance(value, str):
+            return self._redact(value)
+        if isinstance(value, dict):
+            return {self._redact(key): self._redact_value(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [self._redact_value(item) for item in value]
+        return value
 
     @staticmethod
     def _restli_method_override(*, method: str, path: str, params: Mapping[str, Any] | None) -> str | None:

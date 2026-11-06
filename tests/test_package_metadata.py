@@ -15,7 +15,8 @@ def test_mcp_dependency_accepts_supported_v1_and_rejects_v2() -> None:
     requirements = [Requirement(value) for value in pyproject["project"]["dependencies"]]
     mcp_requirement = next(requirement for requirement in requirements if requirement.name == "mcp")
 
-    assert Version("1.26.0") in mcp_requirement.specifier
+    assert Version("1.30.0") in mcp_requirement.specifier
+    assert Version("1.26.0") not in mcp_requirement.specifier
     assert Version("2.0.0") not in mcp_requirement.specifier
 
 
@@ -36,8 +37,8 @@ def test_ruff_uses_stable_explicit_rule_selection() -> None:
 
 def test_ci_installs_build_frontend_before_running_it() -> None:
     workflow = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text()
-    install_command = 'python -m pip install -e ".[dev]" build'
-    build_command = "run: python -m build"
+    install_command = "uv sync --locked --extra dev"
+    build_command = "uv run --locked python -m build"
 
     assert install_command in workflow
     assert build_command in workflow

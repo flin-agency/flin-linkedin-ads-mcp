@@ -1,0 +1,63 @@
+{
+  "manifest_version": "0.4",
+  "name": "flin-linkedin-ads-mcp",
+  "display_name": "flin LinkedIn Ads",
+  "version": "0.3.1",
+  "description": "LinkedIn Ads und Ad Library: geprüfter Server mit festgeschriebenen Abhängigkeiten.",
+  "long_description": "Liest LinkedIn-Werbekonten, Kampagnen, Creatives, Medien und Leistungsdaten. Enthält den Servercode dieser Version. Abhängigkeiten werden beim ersten Start mit UV anhand der mitgelieferten Sperrdatei installiert. Keine automatischen Versionssprünge. Anmeldung über die eigene LinkedIn-App und das eigene Benutzerkonto.",
+  "author": {
+    "name": "flin.agency"
+  },
+  "homepage": "https://github.com/flin-agency/flin-linkedin-ads-mcp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/flin-agency/flin-linkedin-ads-mcp"
+  },
+  "license": "MIT",
+  "server": {
+    "type": "uv",
+    "entry_point": "server/main.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}",
+        "--locked",
+        "server/main.py"
+      ],
+      "env": {
+        "LINKEDIN_CLIENT_ID": "${user_config.client_id}",
+        "LINKEDIN_CLIENT_SECRET": "${user_config.client_secret}",
+        "LINKEDIN_REDIRECT_URI": "http://localhost:9876/callback"
+      }
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "darwin"
+    ],
+    "runtimes": {
+      "python": ">=3.11"
+    }
+  },
+  "tools_generated": true,
+  "user_config": {
+    "client_id": {
+      "type": "string",
+      "title": "LinkedIn Client-ID",
+      "description": "Client-ID der für LinkedIn Ads freigeschalteten App. Erhältst du von der Person, die eure LinkedIn-App verwaltet.",
+      "required": true
+    },
+    "client_secret": {
+      "type": "string",
+      "title": "LinkedIn Client-Secret",
+      "description": "Client-Secret derselben App. Nur hier eintragen, nicht in den Chat.",
+      "sensitive": true,
+      "required": true
+    }
+  },
+  "privacy_policies": [
+    "https://www.linkedin.com/legal/privacy-policy"
+  ]
+}

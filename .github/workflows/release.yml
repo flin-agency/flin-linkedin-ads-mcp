@@ -6,53 +6,80 @@ on:
       - "v*"
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   PYTHONUNBUFFERED: "1"
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
-    environment: pypi
-
+  build:
+    runs-on: macos-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
+          version: "0.10.11"
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: pyproject.toml
-
-      - name: Install dependencies
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+      - name: Install locked dependencies
+        run: uv sync --locked --extra dev
+      - name: Verify tag and quality gates
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]" build twine
-
-      - name: Verify quality gates
+          uv run --locked python -c 'import os, tomllib; from pathlib import Path; assert os.environ["GITHUB_REF_NAME"] == "v" + tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]'
+          uv run --locked ruff check .
+          uv run --locked mypy src
+          uv run --locked pytest -q
+      - name: Audit runtime dependencies
         run: |
-          ruff check .
-          mypy src
-          pytest -q
+          uv export --project desktop-extension --locked --no-dev --no-emit-project --output-file runtime-requirements.txt > /dev/null
+          uv run --locked pip-audit -r runtime-requirements.txt --no-deps --disable-pip
+      - name: Build and verify distributions
+        run: |
+          uv run --locked python -m build
+          uv run --locked twine check dist/*.whl dist/*.tar.gz
+          npx --yes @anthropic-ai/mcpb@2.1.2 validate desktop-extension/manifest.json
+          uv run --locked python scripts/build_desktop_extension.py
+          uv run --locked python scripts/smoke_desktop_extension.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-artifacts
+          path: dist/*
+          if-no-files-found: error
 
-      - name: Build distributions
-        run: python -m build
-
-      - name: Verify distributions
-        run: twine check dist/*
-
-      - name: Publish to PyPI (Trusted Publishing)
-        uses: pypa/gh-action-pypi-publish@release/v1
-
-      - name: Create GitHub Release with artifacts
+  github-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: release-artifacts
+          path: dist
+      - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" dist/* \
-            --title "${GITHUB_REF_NAME}" \
-            --generate-notes
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" \
+            --verify-tag --title "$GITHUB_REF_NAME – Claude Desktop für macOS" --generate-notes
+
+  publish-pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: release-artifacts
+          path: artifacts
+      - name: Select Python distributions
+        run: |
+          mkdir dist
+          cp artifacts/*.whl artifacts/*.tar.gz dist/
+      - name: Publish to PyPI (Trusted Publishing)
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1

@@ -111,7 +111,8 @@ def create_server(settings: LinkedInAdsSettings | None = None, client: Any | Non
                 request_id=request_id,
             )
         except Exception:  # pragma: no cover - defensive fallback
-            logger.exception("Unexpected server error while handling MCP tool call")
+            # Tracebacks can contain tokens, signed URLs and local credential paths.
+            logger.error("Unexpected server error while handling MCP tool call")
             result = error_response(
                 code="linkedin_api_error",
                 message="Unexpected server error",

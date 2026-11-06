@@ -3,6 +3,28 @@
 `flin-linkedin-ads-mcp` ist ein strikt read-only MCP Server für LinkedIn Ads.
 Er ist dafür gebaut, direkt in Claude über MCP eingebunden und getestet zu werden.
 
+## Claude Desktop auf dem Mac installieren
+
+Die Datei **[flin-linkedin-ads-mcp-macos.mcpb herunterladen](https://github.com/flin-agency/flin-linkedin-ads-mcp/releases/latest/download/flin-linkedin-ads-mcp-macos.mcpb)**
+und mit Claude Desktop öffnen. Client-ID und Client-Secret der eigenen LinkedIn-App in
+Claudes Einstellungsfelder eintragen, danach im Chat „Verbinde mich mit LinkedIn Ads“.
+Die App muss `http://localhost:9876/callback` als Redirect URL erlauben.
+
+[Installationsanleitung, Voraussetzungen und Updates](desktop-extension/README.md).
+Das Paket enthält den geprüften Servercode und festgeschriebene Abhängigkeiten;
+keine automatischen Versionssprünge beim Start. Updates erfolgen durch Neuinstallation
+der jeweils aktuellen MCPB-Datei. Prüfsumme: `SHA256SUMS` im Release.
+
+## Neu in `v0.3.1`
+
+- Mac-Installationspaket für Claude Desktop mit mitgeliefertem Servercode.
+- Aktualisierte, festgeschriebene Abhängigkeiten und automatischer Schwachstellenabgleich.
+- Lesezugriff zusätzlich im HTTP-Client erzwungen; API-Weiterleitungen blockiert.
+- Zugangsdaten aus API-Fehlern entfernt und sensible Fehler-Tracebacks vermieden.
+- Komprimierte Medienantworten blockiert, damit Grössenlimits nicht durch Dekompression
+  umgangen werden können.
+- [Sicherheitsprüfung und verbleibende Grenzen](SECURITY.md).
+
 ## Features
 
 - Read-only Zugriff auf LinkedIn Ads Daten
@@ -542,10 +564,10 @@ Dieses Repo enthält:
 
 Der Release-Workflow macht bei `v*` Tags:
 
-1. Lint + Typecheck + Tests
-2. Build + `twine check`
-3. Trusted Publishing zu PyPI
-4. GitHub Release mit `dist/*` Artefakten
+1. Lint, Typecheck, Tests und Schwachstellenabgleich mit festgeschriebenen Abhängigkeiten
+2. Python- und MCPB-Build, `twine check`, Manifestprüfung und MCP-Starttest
+3. GitHub Release mit Python-Paketen, MCPB und Prüfsumme
+4. Separates Trusted Publishing zu PyPI (Environment `pypi`)
 
 Node-20-Deprecation-Warnungen sind abgefangen durch:
 

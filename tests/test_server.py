@@ -43,7 +43,7 @@ class _DummyServer:
         return decorator
 
 
-def test_call_tool_unexpected_exception_does_not_leak_internal_error_details(monkeypatch) -> None:
+def test_call_tool_unexpected_exception_does_not_leak_internal_error_details(monkeypatch, caplog) -> None:
     def _boom(*_, **__):
         raise RuntimeError("sensitive backend failure")
 
@@ -69,6 +69,7 @@ def test_call_tool_unexpected_exception_does_not_leak_internal_error_details(mon
     assert payload["error"]["message"] == "Unexpected server error"
     assert payload["error"]["details"] == {}
     assert "sensitive backend failure" not in response_chunks[0].text
+    assert "sensitive backend failure" not in caplog.text
 
 
 def test_auth_tools_available_without_token_and_return_setup_guidance(monkeypatch) -> None:

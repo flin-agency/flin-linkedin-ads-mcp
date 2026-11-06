@@ -225,3 +225,10 @@ def test_busy_callback_port_has_actionable_error(auth, settings):
         sock.listen()
         with pytest.raises(LinkedInAuthError, match="Cannot open the local login callback"):
             auth.login()
+
+
+def test_provider_error_redacts_all_known_credentials(settings):
+    saved_tokens(settings, refresh_token='refresh-secret')
+    manager = LinkedInAuth(replace(settings, access_token='static-secret'))
+    result = manager.redact('old-token refresh-secret static-secret app-secret')
+    assert result == ' '.join(['[REDACTED]'] * 4)
