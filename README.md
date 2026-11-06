@@ -555,7 +555,7 @@ git diff -- .env
 
 Wenn eine Datei mit Secrets auftaucht: Commit abbrechen und Secrets rotieren.
 
-## GitHub Actions & Release (PyPI-ready)
+## GitHub Actions & Release (PyPI und GitHub)
 
 Dieses Repo enthält:
 
@@ -566,13 +566,24 @@ Der Release-Workflow macht bei `v*` Tags:
 
 1. Lint, Typecheck, Tests und Schwachstellenabgleich mit festgeschriebenen Abhängigkeiten
 2. Python- und MCPB-Build, `twine check`, Manifestprüfung und MCP-Starttest
-3. GitHub Release mit Python-Paketen, MCPB und Prüfsumme
-4. Separates Trusted Publishing zu PyPI (Environment `pypi`)
+3. Trusted Publishing zu PyPI (Environment `pypi`) mit anschliessender Prüfung aller Datei-Hashes
+4. Erst danach GitHub Release mit Python-Paketen, MCPB und Prüfsumme
 
 Node-20-Deprecation-Warnungen sind abgefangen durch:
 
 - aktuelle Actions-Majors (`checkout@v6`, `setup-python@v6`)
 - `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` in beiden Workflows
+
+Jedes Release muss auf **PyPI und GitHub** verfügbar sein. Der portable Release-Build
+läuft auf Linux; die ergänzenden Mac-Tests laufen separat in CI und blockieren PyPI nicht
+durch eine Mac-Runner-Warteschlange. Ein Release gilt erst nach erfolgreicher Prüfung
+beider Veröffentlichungen als abgeschlossen.
+
+Eine unterbrochene Veröffentlichung kann über **Actions → Release → Run workflow** mit
+`release_tag` (z. B. `v0.3.1`) nachgeholt werden. Der Workflow verwendet den unveränderten
+Tag, überspringt bereits auf PyPI vorhandene Dateien nur mit anschliessender Hash-Prüfung
+und ersetzt keine bestehenden GitHub-Dateien. Unterschiedliche Artefakte führen zu einem
+Fehler. Veröffentlichten Code nicht nachträglich unter demselben Tag ändern.
 
 ### PyPI Trusted Publisher einmalig einrichten
 

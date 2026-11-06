@@ -1,6 +1,12 @@
 name: Release
 
 on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to publish or recover (for example v0.3.1)
+        required: true
+        type: string
   push:
     tags:
       - "v*"
@@ -11,12 +17,19 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   PYTHONUNBUFFERED: "1"
+  RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
 
 jobs:
   build:
-    runs-on: macos-latest
+    # The bundle contains portable Python source; macOS is tested separately in CI.
+    runs-on: ubuntu-latest
     steps:
+      - name: Validate release tag
+        shell: bash
+        run: '[[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]'
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           version: "0.10.11"
@@ -28,14 +41,14 @@ jobs:
         run: uv sync --locked --extra dev
       - name: Verify tag and quality gates
         run: |
-          uv run --locked python -c 'import os, tomllib; from pathlib import Path; assert os.environ["GITHUB_REF_NAME"] == "v" + tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]'
+          uv run --locked python -c 'import os, tomllib; from pathlib import Path; assert os.environ["RELEASE_TAG"] == "v" + tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]'
           uv run --locked ruff check .
           uv run --locked mypy src
           uv run --locked pytest -q
       - name: Audit runtime dependencies
         run: |
-          uv export --project desktop-extension --locked --no-dev --no-emit-project --output-file runtime-requirements.txt > /dev/null
-          uv run --locked pip-audit -r runtime-requirements.txt --no-deps --disable-pip
+          uv export --project desktop-extension --locked --no-dev --no-emit-project --output-file "$RUNNER_TEMP/runtime-requirements.txt" > /dev/null
+          uv run --locked pip-audit -r "$RUNNER_TEMP/runtime-requirements.txt" --no-deps --disable-pip
       - name: Build and verify distributions
         run: |
           uv run --locked python -m build
@@ -43,6 +56,20 @@ jobs:
           npx --yes @anthropic-ai/mcpb@2.1.2 validate desktop-extension/manifest.json
           uv run --locked python scripts/build_desktop_extension.py
           uv run --locked python scripts/smoke_desktop_extension.py
+      - name: Check existing GitHub files before publication
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            mkdir "$RUNNER_TEMP/existing-release"
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/existing-release"
+            for file in dist/*; do
+              existing="$RUNNER_TEMP/existing-release/$(basename "$file")"
+              if [ -f "$existing" ]; then
+                cmp "$file" "$existing"
+              fi
+            done
+          fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-artifacts
@@ -50,7 +77,7 @@ jobs:
           if-no-files-found: error
 
   github-release:
-    needs: build
+    needs: [build, publish-pypi]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -63,8 +90,22 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" \
-            --verify-tag --title "$GITHUB_REF_NAME – Claude Desktop für macOS" --generate-notes
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            # Recovery must not replace files people have already downloaded.
+            mkdir existing
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir existing
+            for file in dist/*; do
+              name=$(basename "$file")
+              if [ -f "existing/$name" ]; then
+                cmp "$file" "existing/$name"
+              else
+                gh release upload "$RELEASE_TAG" "$file" --repo "$GITHUB_REPOSITORY"
+              fi
+            done
+          else
+            gh release create "$RELEASE_TAG" dist/* --repo "$GITHUB_REPOSITORY" \
+              --verify-tag --title "$RELEASE_TAG – Claude Desktop für macOS" --generate-notes
+          fi
 
   publish-pypi:
     needs: build
@@ -83,3 +124,34 @@ jobs:
           cp artifacts/*.whl artifacts/*.tar.gz dist/
       - name: Publish to PyPI (Trusted Publishing)
         uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
+        with:
+          skip-existing: true
+      - name: Verify published PyPI files and hashes
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import time
+          import urllib.error
+          import urllib.request
+
+          version = os.environ["RELEASE_TAG"][1:]
+          url = f"https://pypi.org/pypi/flin-linkedin-ads-mcp/{version}/json"
+          expected = {path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+                      for path in Path("dist").iterdir() if path.is_file()}
+          for attempt in range(12):
+              try:
+                  with urllib.request.urlopen(url, timeout=20) as response:
+                      data = json.load(response)
+                  actual = {item["filename"]: item["digests"]["sha256"] for item in data["urls"]}
+                  if all(actual.get(name) == digest for name, digest in expected.items()):
+                      print(f"Verified {len(expected)} PyPI files for {version}")
+                      break
+              except (urllib.error.URLError, TimeoutError):
+                  pass
+              if attempt == 11:
+                  raise SystemExit("PyPI files are missing or differ from the built artifacts")
+              time.sleep(5)
+          PY
