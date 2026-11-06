@@ -30,11 +30,23 @@ deaktivieren, um doppelte Tools und einen belegten Callback-Port zu vermeiden.
 
 ## Sicherheit und Updates
 
-Das Paket enthält den geprüften Servercode der Version **0.3.1** und eine `uv.lock`-Datei
-mit festen Abhängigkeitsversionen und Paket-Hashes. Beim Start wird `uv run --locked`
-verwendet. Es wird keine beliebige neueste Serverversion von PyPI nachgeladen. Updates
-werden durch die Installation einer neuen MCPB-Datei vorgenommen; Sicherheitsupdates
-müssen deshalb aktiv eingespielt werden.
+Die Erweiterung **0.3.2** installiert den Server von PyPI und prüft beim Neustart auf die
+neueste kompatible stabile **0.x-Version** (`>=0.3.2,<1`). Dafür wird `uv run` mit
+`--upgrade-package` und `--refresh-package` verwendet. Vorabversionen werden ausgeschlossen.
+Die Erweiterung enthält keinen eigenen Servercode, der die installierte Version verdecken
+könnte, und keine mitgelieferte Sperrdatei für die Laufzeit.
+
+Für Server-Updates Claude vollständig beenden und neu öffnen. Während eines laufenden
+Gesprächs wird der Server nicht ausgetauscht. Internetzugang ist für die Update-Prüfung
+erforderlich. Login und App-Einstellungen bleiben erhalten. Eine neue MCPB-Datei ist nur
+bei Änderungen der Erweiterungshülle oder einem künftigen Wechsel auf Server 1.x nötig.
+**Wer noch das Paket 0.3.1 verwendet, muss diese MCPB-Datei einmal neu installieren**, um
+automatische Updates zu aktivieren.
+
+Jedes Release wird vor der Veröffentlichung geprüft und auf PyPI sowie GitHub publiziert.
+Automatische Updates vertrauen damit auch künftigen Veröffentlichungen dieses PyPI-Projekts;
+eine Paket-Prüfsumme allein fixiert nicht den später geladenen Servercode. Der Entwicklungs-
+und Release-Build verwendet weiterhin eine geprüfte Sperrdatei im Repository.
 
 Der Server verändert keine LinkedIn-Anzeigen, Kampagnen oder Budgets. Er liest Daten und
 kann ausgewählte Medien lokal speichern. Login und Token-Erneuerung schreiben lokale
@@ -69,10 +81,11 @@ Aus dem Repository-Hauptverzeichnis:
 uv sync --locked --extra dev
 uv run python scripts/build_desktop_extension.py
 npx --yes @anthropic-ai/mcpb@2.1.2 validate desktop-extension/manifest.json
-uv run python scripts/smoke_desktop_extension.py
+uv run python -m build
+uv run python scripts/smoke_desktop_extension.py --wheel dist/*.whl
 ```
 
-Der Builder verwendet eine ausdrückliche Dateiliste und kopiert den Servercode aus `src`.
+Der Builder verwendet eine ausdrückliche Dateiliste für den kleinen PyPI-Launcher.
 Lokale Konfiguration, Tokens, Entwicklungsumgebungen und Build-Caches werden nicht gepackt.
 
 Referenzen:

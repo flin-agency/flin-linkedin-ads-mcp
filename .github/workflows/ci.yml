@@ -41,9 +41,9 @@ jobs:
         run: |
           uv run --locked python -m build
           uv run --locked python scripts/build_desktop_extension.py
-          uv run --locked python scripts/smoke_desktop_extension.py
+          uv run --locked python scripts/smoke_desktop_extension.py --wheel dist/*.whl
       - name: Audit locked runtime dependencies
         if: matrix.python == '3.12'
         run: |
-          uv export --project desktop-extension --locked --no-dev --no-emit-project --output-file runtime-requirements.txt > /dev/null
-          uv run --locked pip-audit -r runtime-requirements.txt --no-deps --disable-pip
+          uv export --locked --no-dev --no-emit-project --output-file "$RUNNER_TEMP/runtime-requirements.txt" > /dev/null
+          uv run --locked pip-audit -r "$RUNNER_TEMP/runtime-requirements.txt" --no-deps --disable-pip

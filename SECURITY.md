@@ -1,4 +1,25 @@
-# Sicherheitsprüfung – v0.3.1
+# Sicherheitsprüfung – v0.3.1 und Update-Modell ab v0.3.2
+
+## Ergänzung v0.3.2: automatische Updates auf ausdrücklichen Nutzerwunsch
+
+Die Desktop-Erweiterung lädt ab v0.3.2 beim Neustart die neueste stabile kompatible
+0.x-Serverversion von PyPI. Die feste Serverkopie und die Sperrdatei aus dem MCPB entfallen,
+damit sie Updates nicht verhindern. Vorabversionen und 1.x-Versionen sind ausgeschlossen.
+Der Entwicklungs-/Release-Build bleibt durch die Root-Sperrdatei reproduzierbar; jede
+Veröffentlichung wird geprüft. Automatische Updates vertrauen auch künftigen PyPI-Releases
+und sind keine dauerhafte Bindung an den einmal geprüften Serverstand.
+
+Ein Integrationstest prüft den Wechsel von einer bereits installierten älteren Version zur
+neuen stabilen Version sowie das Überspringen von Vorab- und 1.x-Versionen. Der echte
+MCP-Start wird vor Veröffentlichung mit dem gebauten Wheel und danach gegen PyPI geprüft.
+Die folgenden Feststellungen beschreiben die Prüfung von v0.3.1; dessen festes Update-Modell
+wurde auf Nutzerwunsch durch das hier dokumentierte Modell ersetzt.
+
+Die Quelldistribution ist ab v0.3.2 auf eine ausdrückliche Dateiliste begrenzt. Im alten
+0.3.1-Quellarchiv war zusätzlich eine ignorierte Worktree-`.env.example` mit dem Platzhalter
+`REPLACE_ME` enthalten. Sie enthält keine echten Zugangsdaten. Bei der Wiederherstellung
+dieses Releases wird ausschliesslich diese exakt per SHA-256 geprüfte Vorlage beim
+Quellvergleich toleriert; die bereits veröffentlichten Archivbytes bleiben unverändert.
 
 Prüfdatum: 6. November 2026. Umfang: Python-Server, Tool-Dispatcher und Eingabeprüfung,
 OAuth-Anmeldung und Token-Speicherung, API-Client, Medien-Downloads, Abhängigkeiten,

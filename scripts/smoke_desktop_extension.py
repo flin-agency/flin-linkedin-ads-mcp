@@ -1,13 +1,17 @@
 """Exercise the packaged MCP over stdio in a fresh directory without real credentials."""
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import tempfile
 from zipfile import ZipFile
+
+from packaging.version import Version
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -15,7 +19,7 @@ from mcp.client.stdio import stdio_client
 ROOT = Path(__file__).resolve().parents[1]
 
 
-async def smoke() -> None:
+async def smoke(wheel: Path | None = None) -> None:
     with tempfile.TemporaryDirectory(prefix='flin-mcpb-') as directory:
         with ZipFile(ROOT / 'dist/flin-linkedin-ads-mcp-macos.mcpb') as archive:
             archive.extractall(directory)
@@ -23,6 +27,9 @@ async def smoke() -> None:
                if not key.startswith(('LINKEDIN_', 'UV_PROJECT_', 'PYTHONPATH', 'VIRTUAL_ENV'))}
         env['LINKEDIN_TOKEN_FILE'] = str(Path(directory) / 'unused-tokens.json')
         env['PYTHONNOUSERSITE'] = '1'
+        if wheel is not None:
+            # Prepublication integration test only; shipped manifest is unchanged.
+            env['UV_FIND_LINKS'] = str(wheel.resolve().parent)
         manifest = json.loads((Path(directory) / 'manifest.json').read_text())
         config = manifest['server']['mcp_config']
         args = [arg.replace('${__dirname}', directory) for arg in config['args']]
@@ -39,8 +46,18 @@ async def smoke() -> None:
                 assert result['data']['status'] == 'not_connected', result
                 denied = await session.call_tool('list_ad_accounts', {})
                 assert json.loads(denied.content[0].text)['error']['code'] == 'auth_error'
+        python = Path(directory) / '.venv' / 'bin' / 'python'
+        installed = subprocess.check_output([
+            str(python), '-c',
+            'from importlib.metadata import version; print(version("flin-linkedin-ads-mcp"))',
+        ], env=env, text=True).strip()
+        assert Version(manifest['version']) <= Version(installed) < Version('1')
+        assert not Version(installed).is_prerelease
+        print(f'Installed stable server: {installed}')
         print('Packaged MCP: initialize, 16 tools, login status and unauthenticated access passed')
 
 
 if __name__ == '__main__':
-    asyncio.run(smoke())
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--wheel', type=Path, help='Test a local wheel before PyPI publication')
+    asyncio.run(smoke(parser.parse_args().wheel))

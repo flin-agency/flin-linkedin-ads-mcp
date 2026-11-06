@@ -11,9 +11,16 @@ Claudes Einstellungsfelder eintragen, danach im Chat „Verbinde mich mit Linked
 Die App muss `http://localhost:9876/callback` als Redirect URL erlauben.
 
 [Installationsanleitung, Voraussetzungen und Updates](desktop-extension/README.md).
-Das Paket enthält den geprüften Servercode und festgeschriebene Abhängigkeiten;
-keine automatischen Versionssprünge beim Start. Updates erfolgen durch Neuinstallation
-der jeweils aktuellen MCPB-Datei. Prüfsumme: `SHA256SUMS` im Release.
+Ab Erweiterung 0.3.2 lädt Claude beim Neustart automatisch die neueste stabile kompatible
+Serverversion von PyPI (0.x). Bestehende Nutzer des festen 0.3.1-Pakets müssen die neue
+MCPB-Datei einmal installieren. Prüfsumme: `SHA256SUMS` im Release.
+
+## Neu in `v0.3.2`
+
+- Automatische stabile PyPI-Updates des Servers bei einem vollständigen Claude-Neustart.
+- Keine mitgelieferten Servermodule, die eine aktualisierte PyPI-Version verdecken können.
+- Jedes Release wird auf PyPI veröffentlicht und per Hash geprüft, bevor GitHub freigegeben wird.
+- Die Quelldistribution verwendet eine ausdrückliche Dateiliste ohne lokale Worktree-Inhalte.
 
 ## Neu in `v0.3.1`
 

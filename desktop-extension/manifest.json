@@ -2,9 +2,9 @@
   "manifest_version": "0.4",
   "name": "flin-linkedin-ads-mcp",
   "display_name": "flin LinkedIn Ads",
-  "version": "0.3.1",
-  "description": "LinkedIn Ads und Ad Library: geprüfter Server mit festgeschriebenen Abhängigkeiten.",
-  "long_description": "Liest LinkedIn-Werbekonten, Kampagnen, Creatives, Medien und Leistungsdaten. Enthält den Servercode dieser Version. Abhängigkeiten werden beim ersten Start mit UV anhand der mitgelieferten Sperrdatei installiert. Keine automatischen Versionssprünge. Anmeldung über die eigene LinkedIn-App und das eigene Benutzerkonto.",
+  "version": "0.3.2",
+  "description": "LinkedIn Ads und Ad Library mit automatischen stabilen PyPI-Updates beim Neustart.",
+  "long_description": "Liest LinkedIn-Werbekonten, Kampagnen, Creatives, Medien und Leistungsdaten. Installiert den Server von PyPI und aktualisiert ihn beim Neustart auf die neueste kompatible stabile 0.x-Version. Anmeldung über die eigene LinkedIn-App und das eigene Benutzerkonto.",
   "author": {
     "name": "flin.agency"
   },
@@ -23,7 +23,12 @@
         "run",
         "--directory",
         "${__dirname}",
-        "--locked",
+        "--prerelease",
+        "disallow",
+        "--upgrade-package",
+        "flin-linkedin-ads-mcp",
+        "--refresh-package",
+        "flin-linkedin-ads-mcp",
         "server/main.py"
       ],
       "env": {

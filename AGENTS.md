@@ -12,3 +12,7 @@
   publication, recover the existing version without changing its source or artifacts.
 - Distinguish PyPI updates from the update behavior of the desktop extension. Do not claim
   that a bundled, locked MCPB automatically updates its server through PyPI.
+- From v0.3.2, the user explicitly requires automatic stable PyPI server updates when
+  Claude Desktop restarts. Keep the launcher free of bundled server modules and a bundled
+  lockfile; these would prevent or shadow updates. The supported update range is 0.x.
+- Test the package before publishing with the built wheel, then again against public PyPI.

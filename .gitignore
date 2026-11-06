@@ -14,3 +14,4 @@ build/
 tokens.json
 *.pem
 *.key
+desktop-extension/uv.lock

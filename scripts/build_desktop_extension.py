@@ -19,11 +19,8 @@ def build(output_dir: Path | None = None) -> Path:
     if len(versions) != 1:
         raise ValueError('Server and extension versions must match')
     files = {name: extension / name for name in (
-        'manifest.json', 'pyproject.toml', 'uv.lock', 'README.md', 'LICENSE', 'server/main.py',
+        'manifest.json', 'pyproject.toml', 'README.md', 'LICENSE', 'server/main.py',
     )}
-    source = ROOT / 'src'
-    files.update({f'server/{path.relative_to(source).as_posix()}': path
-                  for path in sorted((source / 'flin_linkedin_ads_mcp').rglob('*.py'))})
     output_dir = output_dir or ROOT / 'dist'
     output_dir.mkdir(parents=True, exist_ok=True)
     archive = output_dir / 'flin-linkedin-ads-mcp-macos.mcpb'
