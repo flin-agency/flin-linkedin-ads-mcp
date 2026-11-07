@@ -57,6 +57,8 @@ jobs:
           uv run --locked python scripts/build_desktop_extension.py
           if [ -f desktop-extension/uv.lock ]; then
             uv run --locked python scripts/smoke_desktop_extension.py
+          elif grep -q -- '--upgrade-from' scripts/smoke_desktop_extension.py; then
+            uv run --locked python scripts/smoke_desktop_extension.py --wheel dist/*.whl --upgrade-from 0.3.2
           else
             uv run --locked python scripts/smoke_desktop_extension.py --wheel dist/*.whl
           fi
@@ -218,4 +220,8 @@ jobs:
       - name: Test extension against public PyPI
         run: |
           uv sync --locked --extra dev
-          uv run --locked python scripts/smoke_desktop_extension.py
+          if grep -q -- '--upgrade-from' scripts/smoke_desktop_extension.py; then
+            uv run --locked python scripts/smoke_desktop_extension.py --upgrade-from 0.3.2
+          else
+            uv run --locked python scripts/smoke_desktop_extension.py
+          fi

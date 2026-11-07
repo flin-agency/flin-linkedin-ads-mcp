@@ -52,7 +52,11 @@ def create_server(settings: LinkedInAdsSettings | None = None, client: Any | Non
         request_id = getattr(runtime_client, "last_request_id", None)
         media_content: list[Any] = []
         try:
-            if name in {"linkedin_login", "linkedin_login_status"}:
+            if name == "connection_status":
+                if arguments:
+                    raise ValueError("connection_status does not accept arguments")
+                result = {"ok": True, "data": runtime_client.auth.connection_status()}
+            elif name in {"linkedin_login", "linkedin_login_status"}:
                 if arguments:
                     raise ValueError(f"{name} does not accept arguments")
                 auth = runtime_client.auth

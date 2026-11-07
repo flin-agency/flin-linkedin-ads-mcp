@@ -1,88 +1,37 @@
-# Sicherheitsprüfung – v0.3.1 und Update-Modell ab v0.3.2
+# Sicherheit
 
-## Ergänzung v0.3.2: automatische Updates auf ausdrücklichen Nutzerwunsch
+Der LinkedIn-Ads-MCP ist ein lokaler Single-User-stdio-Dienst. Ads-Anfragen sind auf GET
+beschränkt; er ändert keine Anzeigen, Kampagnen oder Budgets. OAuth-Anmeldung und
+Token-Erneuerung schreiben persönliche Zugangsdaten lokal; Mediendownloads schreiben Dateien.
 
-Die Desktop-Erweiterung lädt ab v0.3.2 beim Neustart die neueste stabile kompatible
-0.x-Serverversion von PyPI. Die feste Serverkopie und die Sperrdatei aus dem MCPB entfallen,
-damit sie Updates nicht verhindern. Vorabversionen und 1.x-Versionen sind ausgeschlossen.
-Der Entwicklungs-/Release-Build bleibt durch die Root-Sperrdatei reproduzierbar; jede
-Veröffentlichung wird geprüft. Automatische Updates vertrauen auch künftigen PyPI-Releases
-und sind keine dauerhafte Bindung an den einmal geprüften Serverstand.
+- App-Client-Secret nur in den sensiblen Claude-Einstellungsfeldern hinterlegen, nie im Chat.
+  Die konkrete Speicherung dieser Einstellungen wird von Claude verwaltet; wir behaupten
+  keine zusätzliche Keychain-Verschlüsselung durch diesen Server.
+- Persönliche Tokens liegen standardmässig in `~/.config/flin-linkedin-ads-mcp/tokens.json`.
+  Neue Dateien werden atomar mit `0600` geschrieben, **nicht verschlüsselt**. Prozesse
+  desselben Benutzerkontos können grundsätzlich darauf zugreifen.
+- Der vorübergehende OAuth-Callback bindet nur an `127.0.0.1`; der zufällige State ist
+  einmalig und zehn Minuten gültig. Callback-URLs und Secrets gehören nicht in Support-Logs.
+- Medien werden nur von HTTPS-LinkedIn-CDN-Adressen geladen, ohne API-Bearer-Token. Dateityp
+  und Grösse werden begrenzt. Externe Anzeigeninhalte sind Daten, keine Anweisungen.
+- Der Starter legt PyPI explizit als Standardindex fest, ignoriert fremde UV-Konfigurationsdateien
+  und setzt `PYTHONPATH` leer sowie `PYTHONNOUSERSITE=1`. Das ist eine Begrenzung unerwarteter
+  Konfigurationseinflüsse, kein Nachweis eines zuvor ausgenutzten Sicherheitsproblems. Explizite
+  lokale UV-/Proxy-Umgebungsvariablen bleiben Administrator-Konfiguration und müssen vertrauenswürdig sein.
+- Stabile 0.x-Updates erfolgen beim Neustart. Die Grenze ist eine Projektzusage für den
+  stdio-Einstiegspunkt, App-Felder, Tokenformat und die bestehenden Tools; sie folgt nicht
+  automatisch aus SemVer. Inkompatible Änderungen brauchen einen neuen Starter bzw. eine
+  neue Grenze. Tests prüfen stabile Updates, vorhandene Einstellungen und ausgeschlossene
+  Vorab-/1.x-Versionen. Künftige PyPI-Releases werden damit ebenfalls vertraut.
+- Die MCPB-Dateien sind nicht codesigniert. Prüfsummen sichern den Download, nicht künftig
+  automatisch geladene Serverversionen. Kein gemeinsam genutzter Remote-Betrieb vorgesehen.
 
-Ein Integrationstest prüft den Wechsel von einer bereits installierten älteren Version zur
-neuen stabilen Version sowie das Überspringen von Vorab- und 1.x-Versionen. Der echte
-MCP-Start wird vor Veröffentlichung mit dem gebauten Wheel und danach gegen PyPI geprüft.
-Die folgenden Feststellungen beschreiben die Prüfung von v0.3.1; dessen festes Update-Modell
-wurde auf Nutzerwunsch durch das hier dokumentierte Modell ersetzt.
+Die [ausführliche Prüfung vom 6. November 2026](docs/security-review-2026-11-06.md) ist ein
+historischer Bericht, keine Garantie für heutige Schwachstellenfreiheit. Aktuelle Prüfungen
+stehen im jeweiligen GitHub-Release und Workflow. Apple-Silicon-Start, Linux-CI und ein
+Live-Kundenkontotest sind unterschiedliche Prüfungen; ein echter LinkedIn-Login oder
+interaktiver Claude-Import wurde bei der Paketprüfung nicht durchgeführt.
 
-Die Quelldistribution ist ab v0.3.2 auf eine ausdrückliche Dateiliste begrenzt. Im alten
-0.3.1-Quellarchiv war zusätzlich eine ignorierte Worktree-`.env.example` mit dem Platzhalter
-`REPLACE_ME` enthalten. Sie enthält keine echten Zugangsdaten. Bei der Wiederherstellung
-dieses Releases wird ausschliesslich diese exakt per SHA-256 geprüfte Vorlage beim
-Quellvergleich toleriert; die bereits veröffentlichten Archivbytes bleiben unverändert.
-
-Prüfdatum: 6. November 2026. Umfang: Python-Server, Tool-Dispatcher und Eingabeprüfung,
-OAuth-Anmeldung und Token-Speicherung, API-Client, Medien-Downloads, Abhängigkeiten,
-Git-Historie, Desktop-Paket und GitHub-Workflows. Dies ist eine interne Code- und
-Paketprüfung, keine unabhängige Zertifizierung oder Garantie für Schwachstellenfreiheit.
-
-## Behobene Befunde
-
-| Befund | Änderung |
-| --- | --- |
-| Bekannte Schwachstellen in installierten Abhängigkeiten | Aktualisierung, insbesondere MCP 1.30.0; feste Versionen und Hashes in beiden `uv.lock`-Dateien. |
-| Desktop-Launcher lud bei jedem Start neue Serverversionen | Servercode liegt jetzt im MCPB; `uv run --locked` verhindert ungeprüfte Versionssprünge. |
-| Read-only nur durch Tool-Auswahl abgesichert | HTTP-Client erlaubt ausschliesslich GET ohne Request-Body; zusätzliche Regressionstests. |
-| API-Weiterleitungen und Pfadnormalisierung nicht ausdrücklich gesperrt | Weiterleitungen, absolute URLs und Traversal-Pfade werden vor weiteren Requests blockiert. |
-| Provider-Fehler konnten Zugangsdaten wiedergeben | Bekannte Access-/Refresh-Tokens und Client-Secrets werden aus verschachtelten Fehlern entfernt; unerwartete Fehler werden ohne sensible Tracebacks protokolliert. |
-| Dekompression konnte vor der Medien-Grössenprüfung Speicher belegen | Komprimierte HTTP-Medienantworten werden abgewiesen; bereits vorhandene Dateityp-, Grössen- und CDN-Prüfungen bleiben aktiv. |
-| Bewegliche GitHub-Actions-Versionen und breite Release-Rechte | Actions auf Commit-SHAs fixiert; Build, GitHub-Release und PyPI-Publishing mit getrennten Rechten. |
-
-## Verifikation
-
-- 182 automatisierte Tests, Lint und Typecheck erfolgreich lokal ausgeführt.
-- Laufzeitabhängigkeiten aus der Desktop-Sperrdatei mit `pip-audit` geprüft: keine bekannten
-  Schwachstellen im Abgleich am Prüfdatum. Das Ergebnis ist zeitabhängig; CI prüft erneut.
-- Gitleaks 8.30.1 über 30 bestehende Commits: zwei Treffer ausschliesslich für den
-  README-Platzhalter `DEIN_ACCESS_TOKEN`; nach enger Platzhalter-Ausnahme keine Treffer.
-- Reproduzierbarer MCPB-Build mit ausdrücklicher Dateiliste; Quellcode im Archiv wird
-  bytegenau gegen `src` geprüft. Kein Verpacken des ganzen Arbeitsverzeichnisses.
-- Manifest mit dem offiziellen MCPB-Werkzeug 2.1.2 validiert.
-- Frischer Start des entpackten MCPB auf macOS/Apple Silicon über stdio: Initialisierung,
-  Liste aller 16 Tools, Login-Status ohne Zugangsdaten und Ablehnung nicht authentifizierter
-  API-Zugriffe erfolgreich.
-- Python-Wheel und Quelldistribution gebaut und mit `twine check` geprüft.
-
-Die GitHub-Workflows testen zusätzlich auf Linux/Python 3.11 und 3.12 sowie macOS/Python
-3.13. Der Release-Build läuft auf macOS und prüft das tatsächlich veröffentlichte Paket.
-
-## Schutzgrenzen
-
-- Der Server ist ein lokaler Single-User-stdio-Dienst. Er ist kein gehärteter Remote- oder
-  Multi-Tenant-Server. Die Kontoberechtigungen werden von LinkedIn durchgesetzt.
-- Der OAuth-Callback bindet nur an `127.0.0.1`. Zufälliger State, zehn Minuten Gültigkeit,
-  einmalige Verwendung und keine Callback-URL-Logs schützen die Anmeldung.
-- Token-Dateien werden atomar mit `0600` geschrieben, sind jedoch nicht verschlüsselt.
-  Andere Prozesse desselben Benutzerkontos können grundsätzlich darauf zugreifen.
-- Die MCPB-Konfiguration markiert das Client-Secret als sensibel. Das Paket enthält kein
-  gemeinsames App-Secret. Nutzer müssen Zugangsdaten ihrer eigenen LinkedIn-App hinterlegen.
-- API-Token werden nicht an Medien-CDNs weitergegeben. Medien-Downloads erlauben nur
-  HTTPS unter `.licdn.com` und prüfen jedes Redirect-Ziel. Dies setzt vertrauenswürdiges
-  DNS/TLS und eine vertrauenswürdige lokale Netzwerk-/Proxy-Konfiguration voraus.
-- Lokale Mediendateien werden nicht automatisch gelöscht; Dateisignaturen sind keine
-  vollständige Prüfung auf schädliche Inhalte. Betrachter müssen aktuell gehalten werden.
-- Werbekontodaten und externe Anzeigeninhalte gelangen über Tool-Antworten an den MCP-Client.
-  Externe Inhalte sind untrusted data, keine Anweisungen an den Assistenten.
-- Das MCPB ist nicht codesigniert. Die veröffentlichte SHA-256-Prüfsumme dient der
-  Integritätsprüfung, ersetzt aber keine Herausgeber-Signatur.
-- Kein echter LinkedIn-Login, keine Live-Werbekontodaten, kein separater Intel-Mac und kein
-  interaktiver Import in Claude Desktop wurden für diese Prüfung verwendet.
-- Feste Versionen brauchen bewusste Sicherheitsupdates: Abhängigkeiten aktualisieren,
-  erneut prüfen und eine neue MCPB-Version installieren. Bestehende Installationen
-  aktualisieren sich nicht still im Hintergrund.
-
-## Sicherheitsprobleme melden
-
-Keine Zugangsdaten in öffentlichen Issues veröffentlichen. Für vertrauliche Meldungen
-GitHubs private Sicherheitsmeldung verwenden, sofern im Repository aktiviert, andernfalls
-den Repository-Verantwortlichen über einen bestehenden privaten Kontakt erreichen.
+Widerruf und Bereinigung: [PRIVACY.md](PRIVACY.md). Probleme ohne Secrets oder Kundendaten
+melden; sensible Befunde über GitHubs private Sicherheitsmeldung, sofern aktiviert,
+ansonsten über einen bestehenden privaten Kontakt zum Repository-Verantwortlichen.

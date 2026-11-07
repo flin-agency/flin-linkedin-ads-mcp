@@ -3,34 +3,28 @@
 `flin-linkedin-ads-mcp` ist ein strikt read-only MCP Server für LinkedIn Ads.
 Er ist dafür gebaut, direkt in Claude über MCP eingebunden und getestet zu werden.
 
-## Claude Desktop auf dem Mac installieren
+## Start mit Claude Desktop auf Apple Silicon (M1 oder neuer)
 
-Die Datei **[flin-linkedin-ads-mcp-macos.mcpb herunterladen](https://github.com/flin-agency/flin-linkedin-ads-mcp/releases/latest/download/flin-linkedin-ads-mcp-macos.mcpb)**
-und mit Claude Desktop öffnen. Client-ID und Client-Secret der eigenen LinkedIn-App in
-Claudes Einstellungsfelder eintragen, danach im Chat „Verbinde mich mit LinkedIn Ads“.
-Die App muss `http://localhost:9876/callback` als Redirect URL erlauben.
+1. **[Desktop-Paket herunterladen](https://github.com/flin-agency/flin-linkedin-ads-mcp/releases/latest/download/flin-linkedin-ads-mcp.mcpb)** und mit Claude Desktop öffnen. Alternativ: Einstellungen → Desktop-App → Erweiterungen verwalten → Erweiterte Einstellungen → Erweiterung installieren.
+2. **LinkedIn Client-ID und Client-Secret der App** aus eurem Passwortmanager in die beiden Einstellungsfelder eintragen. Diese Werte erhältst du vom zuständigen Administrator. Keine Secrets in den Chat schreiben.
+3. **Persönlich anmelden:** „Verbinde mich mit LinkedIn Ads“ schreiben und den Link von `linkedin_login` auf demselben Mac öffnen. Mit dem eigenen LinkedIn-Konto anmelden; dieses braucht Zugriff auf die Werbekonten. Die App benötigt `r_ads` und `r_ads_reporting` sowie die registrierte Rückleitungsadresse `http://localhost:9876/callback`.
+4. **Verbindung prüfen:** `connection_status` zeigt die laufende Serverversion und den lokalen Zustand. Danach „Zeige mir meine LinkedIn-Werbekonten“ (`list_ad_accounts`) ausführen. Erst dessen erfolgreiche Antwort bestätigt den Live-Zugriff; ein vorhandener Token allein tut das nicht.
 
-[Installationsanleitung, Voraussetzungen und Updates](desktop-extension/README.md).
-Ab Erweiterung 0.3.2 lädt Claude beim Neustart automatisch die neueste stabile kompatible
-Serverversion von PyPI (0.x). Bestehende Nutzer des festen 0.3.1-Pakets müssen die neue
-MCPB-Datei einmal installieren. Prüfsumme: `SHA256SUMS` im Release.
+Aktuelles Claude Desktop mit MCPB-0.4-/UV-Unterstützung und Internetzugang erforderlich.
+Intel-Macs bleiben unterstützt; die lokale Paketprüfung erfolgt auf Apple Silicon.
+Python-Installationen auf anderen unterstützten Systemen bleiben möglich.
 
-## Neu in `v0.3.2`
+**Updates:** Claude vollständig beenden und neu öffnen. Die Erweiterung lädt stabile
+Serverversionen im unterstützten Bereich 0.x von PyPI, ohne laufende Sitzungen zu ändern.
+App-Einstellungen und persönliche Tokens bleiben erhalten. Die Erweiterungsversion in
+Claude bezeichnet den Starter; `connection_status.server_version` (im Antwortfeld `data`)
+bezeichnet den tatsächlich laufenden Server. Für Änderungen am Starter kann ein einmaliger
+neuer Paketimport nötig sein. Details und Fallback: [SUPPORT.md](SUPPORT.md).
 
-- Automatische stabile PyPI-Updates des Servers bei einem vollständigen Claude-Neustart.
-- Keine mitgelieferten Servermodule, die eine aktualisierte PyPI-Version verdecken können.
-- Jedes Release wird auf PyPI veröffentlicht und per Hash geprüft, bevor GitHub freigegeben wird.
-- Die Quelldistribution verwendet eine ausdrückliche Dateiliste ohne lokale Worktree-Inhalte.
-
-## Neu in `v0.3.1`
-
-- Mac-Installationspaket für Claude Desktop mit mitgeliefertem Servercode.
-- Aktualisierte, festgeschriebene Abhängigkeiten und automatischer Schwachstellenabgleich.
-- Lesezugriff zusätzlich im HTTP-Client erzwungen; API-Weiterleitungen blockiert.
-- Zugangsdaten aus API-Fehlern entfernt und sensible Fehler-Tracebacks vermieden.
-- Komprimierte Medienantworten blockiert, damit Grössenlimits nicht durch Dekompression
-  umgangen werden können.
-- [Sicherheitsprüfung und verbleibende Grenzen](SECURITY.md).
+[Installation und Updates](desktop-extension/README.md) · [Datenschutz](PRIVACY.md) ·
+[Sicherheit](SECURITY.md) · [Hilfe](SUPPORT.md). Der bisherige Downloadname
+`flin-linkedin-ads-mcp-macos.mcpb` bleibt gültig. Releases enthalten zusätzlich einen
+versionierten Paketnamen und `SHA256SUMS`.
 
 ## Features
 
@@ -77,7 +71,7 @@ für Dashboards ist anschliessend deren unterstützter Datei-/Asset-Import nöti
 - Kein generischer Proxy-Endpunkt
 - Authentifizierungs-Tools speichern ausschliesslich lokale Zugangsdaten; Ads-Daten bleiben read-only
 
-## Direkt in Claude testen
+## Entwicklerinstallation und manuelle Konfiguration
 
 ### Variante A: Lokal aus diesem Repo (empfohlen zum Entwickeln)
 
@@ -95,7 +89,7 @@ In Claude:
       "args": [
         "run",
         "--directory",
-        "/Users/nicolasg/Antigravity/flin-linkedin-ads-mcp",
+        "/ABSOLUTER/PFAD/flin-linkedin-ads-mcp",
         "flin-linkedin-ads-mcp"
       ],
       "env": {
@@ -139,7 +133,7 @@ hat der gespeicherte OAuth-Token Vorrang vor einem alten Token aus der Konfigura
 }
 ```
 
-## 2-Minuten Smoke Test in Claude
+## Verbindungstest bei manueller Installation
 
 Nach dem Restart in Claude diese Calls testen:
 
@@ -164,7 +158,7 @@ Beispiel für einen stabilen Test-Call:
 
 ```json
 {
-  "ad_account_id": "508834004",
+  "ad_account_id": "123456789",
   "date_from": "2025-08-01",
   "date_to": "2025-12-31",
   "fields": [
@@ -301,8 +295,8 @@ Beispiel:
 
 ```json
 {
-  "ad_account_id": "508834004",
-  "id": "urn:li:sponsoredCreative:935973186",
+  "ad_account_id": "123456789",
+  "id": "urn:li:sponsoredCreative:987654321",
   "fields": ["id", "name", "imageUrl"]
 }
 ```
@@ -334,7 +328,7 @@ Beispiel:
 
 ```json
 {
-  "ad_account_id": "508834004",
+  "ad_account_id": "123456789",
   "lookback_window": "LAST_30_DAYS",
   "page_size": 100
 }
@@ -363,7 +357,7 @@ Beispiel:
 
 ```json
 {
-  "share_urn": "urn:li:share:7379073146093568000",
+  "share_urn": "urn:li:share:1234567890123456789",
   "include_raw": false
 }
 ```
@@ -405,8 +399,8 @@ des Bildes hängt vom MCP-Client ab.
 
 ```json
 {
-  "ad_account_id": "508834004",
-  "id": "urn:li:sponsoredCreative:935973186",
+  "ad_account_id": "123456789",
+  "id": "urn:li:sponsoredCreative:987654321",
   "kind": "preview",
   "output": "both"
 }
@@ -484,7 +478,7 @@ Danach reicht im Chat die Bitte **„LinkedIn Ads neu verbinden“**:
 - `linkedin_login_status` zeigt den lokalen Status; `token_available` bestätigt noch
   keine Kontoberechtigungen. Mit `list_ad_accounts` den echten API-Zugriff prüfen.
 - Anschliessend den ursprünglichen Call wiederholen, zum Beispiel
-  `get_ad_account` mit `{"id":"509614236"}`. Kein weiterer Neustart und kein Token-Kopieren nötig.
+  `get_ad_account` mit `{"id":"123456789"}`. Kein weiterer Neustart und kein Token-Kopieren nötig.
 
 Login-Links gelten zehn Minuten. Ein erneuter Aufruf während eines offenen Logins
 liefert denselben Link. Abbruch, Ablauf oder ein Fehler lässt sich über den Status abfragen;
@@ -541,7 +535,7 @@ Weitere Optionen:
 ## Lokale Entwicklung
 
 ```bash
-cd /Users/nicolasg/Antigravity/flin-linkedin-ads-mcp
+cd /ABSOLUTER/PFAD/flin-linkedin-ads-mcp
 python -m pip install -e ".[dev]"
 pytest -q
 ruff check .
@@ -574,7 +568,7 @@ Der Release-Workflow macht bei `v*` Tags:
 1. Lint, Typecheck, Tests und Schwachstellenabgleich mit festgeschriebenen Abhängigkeiten
 2. Python- und MCPB-Build, `twine check`, Manifestprüfung und MCP-Starttest
 3. Trusted Publishing zu PyPI (Environment `pypi`) mit anschliessender Prüfung aller Datei-Hashes
-4. Erst danach GitHub Release mit Python-Paketen, MCPB und Prüfsumme
+4. Erst danach GitHub Release mit Python-Paketen, MCPB-Aliasen, versioniertem MCPB und Prüfsummen
 
 Node-20-Deprecation-Warnungen sind abgefangen durch:
 

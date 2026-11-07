@@ -32,8 +32,7 @@ def load_config(env: Mapping[str, str] | None = None) -> LinkedInAdsSettings:
     access_token = source.get("LINKEDIN_ACCESS_TOKEN", "")
     client_id = source.get("LINKEDIN_CLIENT_ID", "")
     client_secret = source.get("LINKEDIN_CLIENT_SECRET", "")
-    if bool(client_id) != bool(client_secret):
-        raise ValueError("Set both LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET for login")
+    # Allow diagnosis before setup is complete; login still requires both app fields.
     redirect_uri = source.get("LINKEDIN_REDIRECT_URI", "http://localhost:9876/callback")
     validate_redirect_uri(redirect_uri)
 

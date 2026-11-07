@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import tomllib
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -28,6 +29,12 @@ def test_bundle_is_reproducible_and_contains_only_release_files(tmp_path):
         assert args[args.index('--refresh-package') + 1] == 'flin-linkedin-ads-mcp'
         assert args[args.index('--prerelease') + 1] == 'disallow'
         assert manifest['user_config']['client_secret']['sensitive'] is True
+        for line in (tmp_path / 'SHA256SUMS').read_text().splitlines():
+            digest, name = line.split()
+            assert hashlib.sha256((tmp_path / name).read_bytes()).hexdigest() == digest
+        assert (tmp_path / 'flin-linkedin-ads-mcp.mcpb').read_bytes() == first
+        release_version = tomllib.loads((ROOT / 'pyproject.toml').read_text())['project']['version']
+        assert (tmp_path / f"flin-linkedin-ads-mcp-{release_version}-macos.mcpb").read_bytes() == first
 
 
 def test_launcher_updates_stable_package_on_restart(tmp_path):
@@ -66,11 +73,35 @@ def test_launcher_updates_stable_package_on_restart(tmp_path):
                UV_CACHE_DIR=str(tmp_path / 'cache'))
     env.pop('VIRTUAL_ENV', None)
     env.pop('PYTHONPATH', None)
-    wheel('0.3.2')
+    base = manifest['version']
+    major, minor, patch = map(int, base.split('.'))
+    newer = f'{major}.{minor}.{patch + 1}'
+    prerelease = f'{major}.{minor}.{patch + 2}rc1'
+    settings_file = tmp_path / 'settings.json'
+    settings_file.write_text(json.dumps({'client_id': 'test-app', 'client_secret': 'fixture-secret'}))
+    token_file = tmp_path / 'tokens.json'
+    token_file.write_text(json.dumps({'access_token': 'fixture-token', 'client_id': 'test-app'}))
+    before_settings, before_token = settings_file.read_bytes(), token_file.read_bytes()
+    env.update(LINKEDIN_TOKEN_FILE=str(token_file), LINKEDIN_CLIENT_ID='test-app',
+               LINKEDIN_CLIENT_SECRET='fixture-secret', PYTHONNOUSERSITE='1', PYTHONPATH='')
+    # A user-level UV config must not redirect resolution for the packaged launcher.
+    config = tmp_path / 'config' / 'uv'
+    config.mkdir(parents=True)
+    (config / 'uv.toml').write_text('resolution = "lowest"\n')
+    env['XDG_CONFIG_HOME'] = str(config.parent)
+    wheel(base)
     first = subprocess.run([uv, *args], env=env, text=True, capture_output=True, check=True)
-    assert first.stdout.strip() == '0.3.2'
-    wheel('0.3.3')
-    wheel('0.3.4rc1')
+    assert first.stdout.strip() == base
+    wheel(newer)
+    wheel(prerelease)
     wheel('1.0.0')
     second = subprocess.run([uv, *args], env=env, text=True, capture_output=True, check=True)
-    assert second.stdout.strip() == '0.3.3', second.stderr
+    assert second.stdout.strip() == newer, second.stderr
+    assert settings_file.read_bytes() == before_settings
+    assert token_file.read_bytes() == before_token
+    assert '1.0.0' not in second.stdout
+    # Explicit recovery after installation; does not contact an index or update packages.
+    fallback = [uv, 'run', '--no-config', '--directory', str(extension), '--offline',
+                '--no-sync', 'server/main.py']
+    cached = subprocess.run(fallback, env=env, text=True, capture_output=True, check=True)
+    assert cached.stdout.strip() == newer

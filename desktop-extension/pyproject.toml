@@ -1,9 +1,9 @@
 [project]
 name = "flin-linkedin-ads-desktop-launcher"
-version = "0.3.2"
+version = "0.3.3"
 description = "Claude Desktop launcher with stable PyPI updates on restart"
 requires-python = ">=3.11"
-dependencies = ["flin-linkedin-ads-mcp>=0.3.2,<1"]
+dependencies = ["flin-linkedin-ads-mcp>=0.3.3,<1"]
 
 [tool.uv]
 package = false

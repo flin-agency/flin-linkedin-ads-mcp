@@ -7,6 +7,7 @@ def test_tool_registry_exposes_expected_read_only_tools() -> None:
     names = [spec.name for spec in tool_specs()]
 
     assert names == [
+        "connection_status",
         "linkedin_login",
         "linkedin_login_status",
         "list_ad_accounts",

@@ -27,6 +27,15 @@ class ToolSpec:
 def tool_specs() -> list[ToolSpec]:
     return [
         ToolSpec(
+            name="connection_status",
+            description=(
+                "Report running server version, local configuration and authentication status. "
+                "No network, browser, refresh or writes. Token presence means unknown, not authenticated. "
+                "live_access is not_checked; use list_ad_accounts for an explicit live check."
+            ),
+            input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+        ),
+        ToolSpec(
             name="linkedin_login",
             description=(
                 "Connect or reconnect LinkedIn Ads, including after EXPIRED_ACCESS_TOKEN/401. "

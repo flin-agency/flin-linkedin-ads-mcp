@@ -16,7 +16,6 @@ def test_load_config_accepts_oauth_without_static_token() -> None:
 
 
 @pytest.mark.parametrize("env", [
-    {"LINKEDIN_CLIENT_ID": "app"}, {"LINKEDIN_CLIENT_SECRET": "secret"},
     {"LINKEDIN_REDIRECT_URI": "http://example.com:9876/callback"},
     {"LINKEDIN_REDIRECT_URI": "http://localhost/callback"},
     {"LINKEDIN_REDIRECT_URI": "http://localhost:9876/callback?extra=yes"},
@@ -41,3 +40,10 @@ def test_load_config_uses_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.restli_protocol_version == "2.0.0"
     assert settings.timeout_seconds == 30.0
     assert settings.max_retries == 3
+
+
+@pytest.mark.parametrize("env", [
+    {"LINKEDIN_CLIENT_ID": "app"}, {"LINKEDIN_CLIENT_SECRET": "secret"},
+])
+def test_partial_oauth_allows_local_diagnosis(env):
+    assert load_config(env).access_token == ""

@@ -232,3 +232,41 @@ def test_provider_error_redacts_all_known_credentials(settings):
     manager = LinkedInAuth(replace(settings, access_token='static-secret'))
     result = manager.redact('old-token refresh-secret static-secret app-secret')
     assert result == ' '.join(['[REDACTED]'] * 4)
+
+
+@pytest.mark.parametrize('configuration,token,rejected,expected', [
+    ({}, None, False, ('incomplete', 'unauthenticated')),
+    ({'LINKEDIN_CLIENT_ID': 'app-id'}, None, False, ('incomplete', 'unauthenticated')),
+    ({'LINKEDIN_CLIENT_ID': 'app-id', 'LINKEDIN_CLIENT_SECRET': 'secret'}, None, False,
+     ('configured', 'unauthenticated')),
+    ({'LINKEDIN_ACCESS_TOKEN': 'secret-token'}, None, False, ('configured', 'unknown')),
+    ({'LINKEDIN_CLIENT_ID': 'app-id', 'LINKEDIN_CLIENT_SECRET': 'secret'},
+     {'access_token': 'saved-secret', 'expires_at': 9999999999}, False, ('configured', 'unknown')),
+    ({'LINKEDIN_CLIENT_ID': 'app-id', 'LINKEDIN_CLIENT_SECRET': 'secret'},
+     {'access_token': 'saved-secret', 'expires_at': 1}, False, ('configured', 'unauthenticated')),
+    ({'LINKEDIN_ACCESS_TOKEN': 'secret-token'}, None, True, ('configured', 'unauthenticated')),
+])
+@respx.mock
+def test_connection_status_is_local_and_never_claims_live_auth(tmp_path, monkeypatch,
+                                                             configuration, token, rejected, expected):
+    from flin_linkedin_ads_mcp import __version__
+    token_file = tmp_path / 'tokens.json'
+    if token:
+        token_file.write_text(json.dumps({'client_id': 'app-id', **token}))
+    before = token_file.read_bytes() if token_file.exists() else None
+    settings = load_config({**configuration, 'LINKEDIN_TOKEN_FILE': str(token_file)})
+    manager = LinkedInAuth(settings)
+    manager._rejected = rejected
+    def forbidden(*args, **kwargs):
+        pytest.fail('Status must not start login or refresh tokens')
+    monkeypatch.setattr(manager, 'login', forbidden)
+    monkeypatch.setattr(manager, '_exchange', forbidden)
+    result = manager.connection_status()
+    assert result['server_version'] == __version__
+    assert (result['configuration_status'], result['auth_status']) == expected
+    assert result['live_access'] == 'not_checked'
+    assert result['next_step']
+    assert not respx.calls
+    assert (token_file.read_bytes() if token_file.exists() else None) == before
+    assert 'secret' not in json.dumps(result).replace('client secret', '')
+    assert manager._pending is None

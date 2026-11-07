@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "flin-linkedin-ads-mcp",
   "display_name": "flin LinkedIn Ads",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "LinkedIn Ads und Ad Library mit automatischen stabilen PyPI-Updates beim Neustart.",
   "long_description": "Liest LinkedIn-Werbekonten, Kampagnen, Creatives, Medien und Leistungsdaten. Installiert den Server von PyPI und aktualisiert ihn beim Neustart auf die neueste kompatible stabile 0.x-Version. Anmeldung über die eigene LinkedIn-App und das eigene Benutzerkonto.",
   "author": {
@@ -21,6 +21,9 @@
       "command": "uv",
       "args": [
         "run",
+        "--no-config",
+        "--default-index",
+        "https://pypi.org/simple",
         "--directory",
         "${__dirname}",
         "--prerelease",
@@ -34,7 +37,9 @@
       "env": {
         "LINKEDIN_CLIENT_ID": "${user_config.client_id}",
         "LINKEDIN_CLIENT_SECRET": "${user_config.client_secret}",
-        "LINKEDIN_REDIRECT_URI": "http://localhost:9876/callback"
+        "LINKEDIN_REDIRECT_URI": "http://localhost:9876/callback",
+        "PYTHONPATH": "",
+        "PYTHONNOUSERSITE": "1"
       }
     }
   },
@@ -51,13 +56,13 @@
     "client_id": {
       "type": "string",
       "title": "LinkedIn Client-ID",
-      "description": "Client-ID der für LinkedIn Ads freigeschalteten App. Erhältst du von der Person, die eure LinkedIn-App verwaltet.",
+      "description": "Client-ID der freigeschalteten LinkedIn-App aus eurem Passwortmanager; erhältlich beim zuständigen Administrator.",
       "required": true
     },
     "client_secret": {
       "type": "string",
       "title": "LinkedIn Client-Secret",
-      "description": "Client-Secret derselben App. Nur hier eintragen, nicht in den Chat.",
+      "description": "Client-Secret derselben App aus eurem Passwortmanager. Nur hier eintragen, nie im Chat. Die persönliche LinkedIn-Anmeldung folgt separat.",
       "sensitive": true,
       "required": true
     }

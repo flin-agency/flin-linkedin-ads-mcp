@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flin-linkedin-ads-mcp"
-version = "0.3.2"
+version = "0.3.3"
 description = "Strict read-only MCP server for LinkedIn Ads"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -41,7 +41,7 @@ Issues = "https://github.com/flin-agency/flin-linkedin-ads-mcp/issues"
 [tool.hatch.build.targets.sdist]
 include = [
   "/src", "/tests", "/scripts", "/desktop-extension", "/.github",
-  "/README.md", "/SECURITY.md", "/AGENTS.md", "/LICENSE", "/pyproject.toml", "/uv.lock",
+  "/README.md", "/PRIVACY.md", "/SUPPORT.md", "/docs", "/SECURITY.md", "/AGENTS.md", "/LICENSE", "/pyproject.toml", "/uv.lock",
 ]
 exclude = [".venv", "__pycache__", "*.pyc", "desktop-extension/uv.lock"]
 

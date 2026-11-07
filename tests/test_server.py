@@ -102,3 +102,17 @@ def test_auth_tool_routes_to_live_manager(monkeypatch) -> None:
         app = server.create_server(settings, client)
         result = json.loads(asyncio.run(app.call_tool_handler("linkedin_login", {}))[0].text)
         assert result["data"]["authorization_url"] == "https://example.test"
+
+
+def test_connection_status_routes_locally_and_rejects_arguments(monkeypatch):
+    monkeypatch.setattr(server, 'Server', _DummyServer)
+    monkeypatch.setattr(server, 'mcp_types', _DummyMcpTypes)
+    settings = load_config({'LINKEDIN_CLIENT_ID': 'incomplete-app'})
+    with server._client(settings) as client:
+        app = server.create_server(settings, client)
+        chunks = asyncio.run(app.call_tool_handler('connection_status', {}))
+        payload = json.loads(chunks[0].text)
+        assert payload['data']['configuration_status'] == 'incomplete'
+        assert payload['data']['live_access'] == 'not_checked'
+        bad = asyncio.run(app.call_tool_handler('connection_status', {'live_check': True}))
+        assert json.loads(bad[0].text)['error']['code'] == 'validation_error'

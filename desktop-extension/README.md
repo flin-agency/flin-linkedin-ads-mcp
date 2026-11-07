@@ -1,94 +1,69 @@
-# flin LinkedIn Ads für Claude Desktop auf dem Mac
+# flin LinkedIn Ads für Claude Desktop
 
-## Installation
+Für Apple Silicon (M1 oder neuer); Intel-Macs bleiben unterstützt. Aktuelles Claude Desktop
+mit MCPB-0.4-/UV-Unterstützung und Internetzugang erforderlich. Python wird von Claude/UV
+verwaltet und muss für die Erweiterung nicht separat installiert werden.
 
-1. Die Datei **flin-linkedin-ads-mcp-macos.mcpb** aus dem
-   [aktuellen GitHub-Release](https://github.com/flin-agency/flin-linkedin-ads-mcp/releases/latest)
-   herunterladen und mit Claude Desktop öffnen. Alternativ in Claude unter
-   **Einstellungen → Erweiterungen → Erweiterte Einstellungen → Erweiterung installieren**
-   auswählen. Die Bezeichnungen können je nach Claude-Version abweichen.
-2. Client-ID und Client-Secret der eigenen, für LinkedIn Ads freigeschalteten App in die
-   Einstellungsfelder eintragen. Das Secret-Feld ist als sensibel markiert; keine Zugangsdaten
-   in den Chat schreiben.
-3. In der LinkedIn Developer App muss unter **Auth** exakt
-   `http://localhost:9876/callback` als Rückleitungsadresse registriert sein.
-4. In einem neuen Chat schreiben: **„Verbinde mich mit LinkedIn Ads.“** Den von
-   `linkedin_login` zurückgegebenen Link auf demselben Mac öffnen und anmelden.
-5. Danach: **„Zeige mir meine LinkedIn-Werbekonten.“** Das prüft den tatsächlichen Zugriff.
+1. [Paket herunterladen](https://github.com/flin-agency/flin-linkedin-ads-mcp/releases/latest/download/flin-linkedin-ads-mcp.mcpb)
+   und mit Claude Desktop öffnen. Alternativ unter Einstellungen → Desktop-App → Erweiterungen
+   verwalten → Erweiterte Einstellungen → Erweiterung installieren auswählen.
+2. Client-ID und Client-Secret der LinkedIn-App aus dem Passwortmanager in die beiden Felder
+   eintragen. Zuständigen Administrator fragen, falls sie fehlen; niemals in den Chat schreiben.
+3. Persönlich mit `linkedin_login` anmelden: den Link auf demselben Mac öffnen und das eigene
+   LinkedIn-Konto verwenden. Dieses braucht Werbekontozugriff. Die App muss `r_ads` und
+   `r_ads_reporting` sowie `http://localhost:9876/callback` als Redirect erlauben.
+4. `connection_status` zeigt die laufende Serverversion und den lokalen Zustand. Danach
+   `list_ad_accounts` ausführen; nur dieser erfolgreiche Aufruf bestätigt Live-Zugriff.
 
-Eine aktuelle Claude-Desktop-Version mit Unterstützung für MCPB 0.4 und die verwaltete
-UV-Laufzeit ist erforderlich. Python muss nicht manuell installiert werden. Beim ersten
-Start ist Internetzugang für die Laufzeit und die Python-Abhängigkeiten erforderlich.
-Das Paket ist für Apple Silicon und Intel vorgesehen; der lokale Start wurde auf Apple
-Silicon geprüft. Ein separater Intel-Mac und der Login in einem realen Werbekonto wurden
-für dieses Release nicht getestet.
+## Versionen und Updates
 
-Die App benötigt `r_ads` und `r_ads_reporting`. Das eigene LinkedIn-Konto braucht Zugriff
-auf die Werbekonten. Die Ad Library setzt zusätzlich das freigeschaltete Produkt
-**LinkedIn Ad Library** voraus. Eine bestehende manuelle Installation dieses MCP vorher
-deaktivieren, um doppelte Tools und einen belegten Callback-Port zu vermeiden.
+Die Starterversion ist die im Manifest/Claude angezeigte Erweiterungsversion.
+`connection_status` liefert im Feld `data.server_version` die tatsächlich laufende
+Serverversion. Sie kann nach einem Update neuer sein als die Starterversion.
 
-## Sicherheit und Updates
+Der Starter lädt beim vollständigen Claude-Neustart stabile Serverversionen `>=0.3.3,<1`
+von PyPI. Vorabversionen sind ausgeschlossen. Innerhalb dieses Bereichs hält das Projekt
+den stdio-Einstiegspunkt, App-Felder, Tokenformat und bisherige Tools kompatibel; 0.x allein
+ist keine allgemeine SemVer-Garantie. Neue Versionen werden geprüft. Ein laufender Server
+wird nicht mitten im Gespräch ausgetauscht. Einstellungen und Tokens werden weiterverwendet.
 
-Die Erweiterung **0.3.2** installiert den Server von PyPI und prüft beim Neustart auf die
-neueste kompatible stabile **0.x-Version** (`>=0.3.2,<1`). Dafür wird `uv run` mit
-`--upgrade-package` und `--refresh-package` verwendet. Vorabversionen werden ausgeschlossen.
-Die Erweiterung enthält keinen eigenen Servercode, der die installierte Version verdecken
-könnte, und keine mitgelieferte Sperrdatei für die Laufzeit.
+**Einmalig das neue MCPB importieren**, um auch die neuen Starter-Einstellungen zu erhalten.
+Extension-ID und Feldnamen sind unverändert; nicht vorher deinstallieren oder Tokens löschen.
+Bestehende Starter ab 0.3.2 bekommen den neuen Server samt `connection_status` bereits beim
+Neustart. Spätere UI-/Starter-Änderungen können erneut einen Import benötigen.
 
-Für Server-Updates Claude vollständig beenden und neu öffnen. Während eines laufenden
-Gesprächs wird der Server nicht ausgetauscht. Internetzugang ist für die Update-Prüfung
-erforderlich. Login und App-Einstellungen bleiben erhalten. Eine neue MCPB-Datei ist nur
-bei Änderungen der Erweiterungshülle oder einem künftigen Wechsel auf Server 1.x nötig.
-**Wer noch das Paket 0.3.1 verwendet, muss diese MCPB-Datei einmal neu installieren**, um
-automatische Updates zu aktivieren.
+Beim Start wird PyPI geprüft. Caches werden weiterverwendet, ein automatischer Offline-
+Fallback ist aber nicht garantiert. Eine laufende Sitzung weiterverwenden oder später
+neu starten. Ein Administrator kann eine bereits installierte Umgebung mit
+`uv run --no-config --directory /PFAD/ZUR/ERWEITERUNG --offline --no-sync server/main.py`
+weiterverwenden; App-Einstellungen unverändert übergeben. LinkedIn-Abfragen benötigen
+weiterhin Netzwerk. Details: [Support](https://github.com/flin-agency/flin-linkedin-ads-mcp/blob/main/SUPPORT.md).
 
-Jedes Release wird vor der Veröffentlichung geprüft und auf PyPI sowie GitHub publiziert.
-Automatische Updates vertrauen damit auch künftigen Veröffentlichungen dieses PyPI-Projekts;
-eine Paket-Prüfsumme allein fixiert nicht den später geladenen Servercode. Der Entwicklungs-
-und Release-Build verwendet weiterhin eine geprüfte Sperrdatei im Repository.
+## Daten und Sicherheit
 
-Der Server verändert keine LinkedIn-Anzeigen, Kampagnen oder Budgets. Er liest Daten und
-kann ausgewählte Medien lokal speichern. Login und Token-Erneuerung schreiben lokale
-Zugangsdaten. Die Anmeldung öffnet kurzzeitig einen HTTP-Callback ausschliesslich auf
-`127.0.0.1`, geschützt durch einen zufälligen, einmaligen OAuth-State.
+Persönliche Tokens: `~/.config/flin-linkedin-ads-mcp/tokens.json`, atomar mit `0600`
+geschrieben, **nicht verschlüsselt**. Medien: `~/.cache/flin-linkedin-ads-mcp/media`.
+Die App-Zugangsdaten verwaltet Claude in seinen Erweiterungseinstellungen. Der Server
+verändert keine Ads-Daten; Login und Medienabruf schreiben lokale Dateien.
 
-Persönliche Tokens liegen in `~/.config/flin-linkedin-ads-mcp/tokens.json` mit Dateirechten
-`0600`. Diese Datei ist **nicht verschlüsselt**. Medien liegen standardmässig unter
-`~/.cache/flin-linkedin-ads-mcp/media` und werden nicht automatisch gelöscht. Der Server
-ist für einen einzelnen lokalen Benutzer vorgesehen, nicht als gemeinsamer Remote-Dienst.
+Die Pakete sind nicht codesigniert. Alle drei Downloadnamen enthalten identische Bytes:
+`flin-linkedin-ads-mcp.mcpb`, der bisherige Name `flin-linkedin-ads-mcp-macos.mcpb` und der
+jeweilige versionierte Name. Mit allen Dateien und `SHA256SUMS` im selben Ordner lässt sich
+`shasum -a 256 -c SHA256SUMS` ausführen. Diese Prüfsumme fixiert nicht spätere PyPI-Updates.
 
-Ausgewählte Werbekontodaten werden als Tool-Antwort an Claude übergeben. Anzeigeninhalte
-und API-Antworten sind externe Daten und dürfen nicht als Anweisungen behandelt werden.
-Das Paket enthält keine persönlichen Zugangsdaten oder Werbekontodaten und ist nicht
-codesigniert. `SHA256SUMS` im Release ermöglicht die Prüfung auf unveränderte Downloads:
+[Datenschutz und Widerruf](https://github.com/flin-agency/flin-linkedin-ads-mcp/blob/main/PRIVACY.md) ·
+[Sicherheit](https://github.com/flin-agency/flin-linkedin-ads-mcp/blob/main/SECURITY.md)
 
-```sh
-shasum -a 256 -c SHA256SUMS
-```
-
-## Beispiele
-
-- „Zeige mir die Kampagnenleistung der letzten 30 Tage.“
-- „Zeige mir meine Anzeigen inklusive Bildern.“
-- „Suche in der LinkedIn Ad Library nach Anzeigen von Microsoft in Deutschland.“
-
-## Paket reproduzierbar bauen
-
-Aus dem Repository-Hauptverzeichnis:
+## Entwicklung
 
 ```sh
 uv sync --locked --extra dev
+uv run python -m build
 uv run python scripts/build_desktop_extension.py
 npx --yes @anthropic-ai/mcpb@2.1.2 validate desktop-extension/manifest.json
-uv run python -m build
-uv run python scripts/smoke_desktop_extension.py --wheel dist/*.whl
+uv run python scripts/smoke_desktop_extension.py --wheel dist/*.whl --upgrade-from 0.3.2
 ```
 
-Der Builder verwendet eine ausdrückliche Dateiliste für den kleinen PyPI-Launcher.
-Lokale Konfiguration, Tokens, Entwicklungsumgebungen und Build-Caches werden nicht gepackt.
-
-Referenzen:
-- [MCPB-Format und UV-Laufzeit](https://github.com/modelcontextprotocol/mcpb/blob/main/MANIFEST.md)
-- [Lokale MCP-Server in Claude Desktop](https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop)
-- [LinkedIn-Datenschutzerklärung](https://www.linkedin.com/legal/privacy-policy)
+Nach Veröffentlichung denselben Starttest ohne `--wheel` gegen öffentliches PyPI ausführen.
+Apple-Silicon-Start, Linux-CI und ein echter Kundenkontotest sind getrennte Prüfschritte;
+es wird kein Kundenlogin durch diesen Starttest ausgeführt.

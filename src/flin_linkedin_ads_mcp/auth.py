@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 import httpx
 
 from .config import LinkedInAdsSettings, validate_redirect_uri
+from . import __version__
 from .errors import LinkedInAuthError
 
 TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
@@ -190,6 +191,32 @@ class LinkedInAuth:
                 ),
                 "error": self._error,
                 "note": "Local login status only; use list_ad_accounts to verify access with LinkedIn.",
+            }
+
+    def connection_status(self) -> dict[str, str]:
+        """Local diagnosis only: no refresh, browser, network call or credential writes."""
+        with self._lock:
+            configured = self.configured or bool(self.settings.access_token)
+            has_token = bool(self._tokens.get("access_token") or self.settings.access_token)
+            expiry = self._tokens.get("expires_at")
+            unusable = self._rejected or (expiry is not None and expiry <= time.time())
+            auth_status = "unknown" if has_token and not unusable else "unauthenticated"
+            if not configured:
+                next_step = "Enter both LinkedIn app client ID and client secret in the extension settings."
+            elif self._pending and self._pending.deadline > time.monotonic():
+                next_step = "Finish the pending LinkedIn login, then call list_ad_accounts to verify access."
+            elif auth_status == "unauthenticated":
+                next_step = ("Call linkedin_login, sign in with your own LinkedIn account, then list_ad_accounts."
+                             if self.configured else
+                             "Replace the static access token or configure OAuth and call linkedin_login.")
+            else:
+                next_step = "Call list_ad_accounts to verify live LinkedIn access; local token presence is not proof."
+            return {
+                "server_version": __version__,
+                "configuration_status": "configured" if configured else "incomplete",
+                "auth_status": auth_status,
+                "live_access": "not_checked",
+                "next_step": next_step,
             }
 
     def login(self) -> dict[str, Any]:
