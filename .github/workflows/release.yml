@@ -217,6 +217,34 @@ jobs:
         with:
           name: release-artifacts
           path: dist
+      - name: Wait for public installation index
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+
+          version = os.environ["RELEASE_TAG"][1:]
+          wheel = f"flin_linkedin_ads_mcp-{version}-py3-none-any.whl"
+          request = urllib.request.Request(
+              "https://pypi.org/simple/flin-linkedin-ads-mcp/",
+              headers={"Accept": "application/vnd.pypi.simple.v1+json", "Cache-Control": "no-cache"},
+          )
+          for attempt in range(36):
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      files = json.load(response)["files"]
+                  if any(item["filename"] == wheel and not item.get("yanked") for item in files):
+                      print(f"Stable wheel visible in public index: {version}")
+                      break
+              except (urllib.error.URLError, TimeoutError):
+                  pass
+              if attempt == 35:
+                  raise SystemExit("Release uploaded but public installation index is not ready")
+              time.sleep(5)
+          PY
       - name: Test extension against public PyPI
         run: |
           uv sync --locked --extra dev
